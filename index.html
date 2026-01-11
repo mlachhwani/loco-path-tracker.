@@ -1,160 +1,115 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 3.2 - Stable Power Suite</title>
-    <meta charset="utf-8" />
+    <title>Sanket 5.0 - Master Integrated Audit</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail: #002f6c; --text: #333; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #eaeff2; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: sans-serif; margin: 0; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: #002f6c; color: white; padding: 10px 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; }
+        .box { display: flex; flex-direction: column; gap: 2px; }
+        label { font-size: 10px; font-weight: bold; color: #adcce9; }
+        input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
+        .name-tag { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 14px; }
         
-        /* Top Navigation Bar */
-        header { background: var(--rail); color: white; padding: 12px 20px; display: flex; gap: 15px; align-items: flex-end; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 1000; }
-        .box { display: flex; flex-direction: column; gap: 4px; }
-        label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
-        input, select { padding: 8px; border-radius: 4px; border: none; font-size: 13px; outline: none; }
-        .name-tag { font-size: 12px; font-weight: bold; color: #fff; min-height: 16px; margin-top: 4px; border-bottom: 1px solid #4a6a8a; }
-        .run-btn { background: #27ae60; color: white; border: none; padding: 10px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; height: 38px; }
-        .run-btn:hover { background: #2ecc71; }
-
-        /* Dashboard Layout */
-        main { display: grid; grid-template-rows: 1.2fr 1fr; gap: 10px; padding: 15px; flex: 1; overflow: hidden; }
-        #map { background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); position: relative; }
-        h4 { margin: 0 0 10px 0; color: var(--rail); font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-        
-        /* HUD */
-        #hud { position: absolute; top: 120px; left: 30px; background: rgba(0,0,0,0.85); color: white; padding: 12px; border-radius: 8px; z-index: 1000; border-left: 5px solid #d93025; pointer-events: none; }
+        main { display: grid; grid-template-rows: 1.2fr 1fr; gap: 10px; padding: 10px; flex: 1; overflow: hidden; }
+        #map { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .card { background: white; padding: 10px; border-radius: 8px; position: relative; }
+        h4 { margin: 0 0 5px 0; font-size: 12px; color: #002f6c; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="box">
-        <label>CLI ID</label>
-        <input type="text" id="cliId" placeholder="R0047" oninput="doSearch('cli')">
-        <div id="cliName" class="name-tag">-</div>
-    </div>
-    <div class="box">
-        <label>LP ID</label>
-        <input type="text" id="lpId" placeholder="R1016" oninput="doSearch('lp')">
-        <div id="lpName" class="name-tag">-</div>
-    </div>
-    <div class="box">
-        <label>Section From</label>
-        <select id="fromStn"><option value="">Select From</option></select>
-    </div>
-    <div class="box">
-        <label>Section To</label>
-        <select id="toStn"><option value="">Select To</option></select>
-    </div>
-    <div class="box">
-        <label>Loco Data (CSV)</label>
-        <input type="file" id="csvFile">
-    </div>
-    <button class="run-btn" onclick="executeAudit()">GENERATE REPORT</button>
+    <div class="box"><label>CLI ID</label><input type="text" id="cliId" oninput="look('cli')"><div id="cliN" class="name-tag">-</div></div>
+    <div class="box"><label>LP ID</label><input type="text" id="lpId" oninput="look('lp')"><div id="lpN" class="name-tag">-</div></div>
+    <div class="box"><label>Section</label><div style="display:flex;gap:2px;"><select id="fStn" style="width:50%"></select><select id="tStn" style="width:50%"></select></div></div>
+    <div class="box"><label>RTIS Loco CSV</label><input type="file" id="locoFile"></div>
+    <button style="background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;height:30px;" onclick="runAudit()">GENERATE REPORT</button>
 </header>
 
 <main>
-    <div id="map">
-        <div id="hud">
-            <div id="hudSpeed" style="font-size: 28px; font-weight: bold;">0 KMPH</div>
-            <div id="hudLoc" style="font-size: 13px; color: #ccc;">Awaiting Data...</div>
-        </div>
-    </div>
-    <div class="chart-row">
-        <div class="card">
-            <h4>Journey Speed Profile</h4>
-            <canvas id="chartJ"></canvas>
-        </div>
-        <div class="card">
-            <h4>Stoppage Braking Audit</h4>
-            <canvas id="chartB"></canvas>
-        </div>
+    <div id="map"></div>
+    <div class="charts">
+        <div class="card"><h4>Journey Profile</h4><canvas id="chartJ"></canvas></div>
+        <div class="card"><h4>Braking Technique (Final Approach)</h4><canvas id="chartB"></canvas></div>
     </div>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const map = L.map('map').setView([21.1458, 79.0882], 8);
+    const map = L.map('map').setView([21.14, 79.08], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let masters = { cli:[], crew:[], stn:[] };
+    let masters = { crew:[], stn:[] };
     let activeCharts = {};
 
-    // 1. LOAD MASTER DATA IMMEDIATELY
+    // Helper: Convert DDMM.MMMM to Decimal Degrees
+    function toDD(val) {
+        if (!val) return null;
+        let s = val.toString();
+        let deg = parseFloat(s.substring(0, s.indexOf('.') - 2));
+        let min = parseFloat(s.substring(s.indexOf('.') - 2));
+        return deg + (min / 60);
+    }
+
+    // Load All 5 Master Files Automatically
     window.onload = () => {
-        Papa.parse("master/cli_master.csv", { download:true, header:true, complete: r => masters.cli = r.data });
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
-        Papa.parse("master/station.csv", { download:true, header:true, complete: r => {
-            masters.stn = r.data;
-            r.data.forEach(s => {
-                const sName = s.Station_Name || s.STATION;
-                if(sName) {
-                    document.getElementById('fromStn').add(new Option(sName, sName));
-                    document.getElementById('toStn').add(new Option(sName, sName));
-                    
-                    let lat = parseFloat(s.Start_Lat || s.Lat || s.LAT);
-                    let lng = parseFloat(s.Start_Lng || s.Lng || s.LNG);
-                    if(!isNaN(lat)) L.circleMarker([lat, lng], {radius:5, color:'orange'}).addTo(map).bindTooltip(sName);
-                }
-            });
-        }});
+        
+        const signalFiles = ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"];
+        signalFiles.forEach(file => {
+            Papa.parse(file, { download:true, header:true, complete: r => {
+                r.data.forEach(s => {
+                    let lat = toDD(s.Lat || s.LAT || s.Latitude);
+                    let lng = toDD(s.Lng || s.LNG || s.Longitude);
+                    if(lat && lng) {
+                        let color = file.includes('station') ? 'orange' : 'blue';
+                        L.circleMarker([lat, lng], {radius:4, color: color}).addTo(map).bindTooltip(s.Station_Name || s.Signal_Name || "Point");
+                        if(file.includes('station')) {
+                            document.getElementById('fStn').add(new Option(s.Station_Name, s.Station_Name));
+                            document.getElementById('tStn').add(new Option(s.Station_Name, s.Station_Name));
+                        }
+                    }
+                });
+            }});
+        });
     };
 
-    // 2. STABLE LOOKUP
-    function doSearch(type) {
-        const id = document.getElementById(type+'Id').value.toUpperCase();
-        const list = (type === 'cli') ? masters.cli : masters.crew;
-        const key = (type === 'cli') ? 'CLI_ID' : 'CREW_ID';
-        const nameKey = (type === 'cli') ? 'CLI_NAME' : 'CREW_NAME';
-        
-        const found = list.find(x => x[key] === id);
-        document.getElementById(type+'Name').innerText = found ? found[nameKey] : "-";
+    function look(t) {
+        let id = document.getElementById(t+'Id').value.toUpperCase();
+        let f = masters.crew.find(x => (x.CREW_ID || x.CLI_ID) === id);
+        document.getElementById(t+'N').innerText = f ? (f.CREW_NAME || f.CLI_NAME) : "-";
     }
 
-    // 3. EXECUTE AUDIT
-    function executeAudit() {
-        const file = document.getElementById('csvFile').files[0];
-        if(!file) return alert("Select CSV File!");
+    function runAudit() {
+        let file = document.getElementById('locoFile').files[0];
+        if(!file) return;
+        Papa.parse(file, { header:true, dynamicTyping:true, complete: r => {
+            let data = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
+            
+            // Draw Path
+            let path = data.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
+            L.polyline(path, {color:'red', weight:3}).addTo(map);
+            map.fitBounds(path);
 
-        Papa.parse(file, {
-            header:true, dynamicTyping:true, skipEmptyLines:true,
-            complete: r => {
-                const data = r.data.filter(d => (d.Latitude || d.lat) && d.Speed != null);
-                if(data.length === 0) return alert("Error: CSV has no valid GPS/Speed data!");
+            // Chart 1: Full Speed
+            draw('chartJ', data.map(x=>x.Speed), 'Blue', 'KMPH');
 
-                // Update Map
-                const path = data.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
-                L.polyline(path, {color: '#1a73e8', weight: 4}).addTo(map);
-                map.fitBounds(path);
-
-                // Live HUD Mockup (Updates on hover)
-                map.on('mousemove', () => {
-                    const mid = data[Math.floor(data.length/2)];
-                    document.getElementById('hudSpeed').innerText = mid.Speed + " KMPH";
-                    document.getElementById('hudLoc').innerText = mid['last/cur stationCode'] || "On Track";
-                });
-
-                // Render Graphs
-                renderChart('chartJ', data.map((_,i)=>i), data.map(d=>d.Speed), 'Journey Speed', '#1a73e8');
-                renderChart('chartB', data.slice(-200).map((_,i)=>i), data.slice(-200).map(d=>d.Speed), 'Braking Pattern', '#d93025');
-            }
-        });
+            // Chart 2: BRAKING FIX (Takes last 300 points to show the curve, not just 0)
+            let bPoints = data.slice(-300);
+            draw('chartB', bPoints.map(x=>x.Speed), 'Red', 'Braking Curve');
+        }});
     }
 
-    function renderChart(id, labels, values, label, color) {
+    function draw(id, vals, clr, lbl) {
         if(activeCharts[id]) activeCharts[id].destroy();
         activeCharts[id] = new Chart(document.getElementById(id), {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{ label: label, data: values, borderColor: color, pointRadius: 0, fill: id==='chartJ', backgroundColor: color+'22' }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+            data: { labels: vals.map((_,i)=>i), datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0}] },
+            options: { responsive:true, maintainAspectRatio:false, scales:{x:{display:false}} }
         });
     }
 </script>
