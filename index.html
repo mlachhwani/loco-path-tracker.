@@ -1,132 +1,87 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 7.0 - Railway Audit Pro</title>
+    <title>Mukesh Favorite - Final Audit</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #eaeff2; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        /* Header Fix */
-        header { background: #002f6c; color: white; padding: 10px 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 1000; }
-        .box { display: flex; flex-direction: column; gap: 2px; }
-        label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
-        input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
-        .name-tag { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 14px; margin-top: 2px; border-bottom: 1px solid #444; }
-        
-        /* Layout Fix: Map on top, Charts below */
+        body { font-family: sans-serif; margin: 0; background: #f4f7f9; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #002f6c; color: white; padding: 12px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; }
+        .box { display: flex; flex-direction: column; gap: 4px; }
+        label { font-size: 10px; font-weight: bold; color: #adcce9; }
+        input, select { padding: 8px; border-radius: 4px; border: none; font-size: 12px; }
+        .res-name { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 15px; }
         main { display: flex; flex-direction: column; flex: 1; padding: 10px; gap: 10px; overflow: hidden; }
-        #map { flex: 1.5; background: white; border-radius: 8px; border: 2px solid #002f6c; }
-        .charts-row { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-        h4 { margin: 0 0 5px 0; font-size: 12px; color: #002f6c; border-bottom: 1px solid #eee; }
-        canvas { flex: 1 !important; }
+        #map { flex: 1.5; background: white; border-radius: 8px; border: 1px solid #ccc; }
+        .charts { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h4 { margin: 0 0 5px 0; font-size: 12px; color: #002f6c; }
     </style>
 </head>
 <body>
-
 <header>
-    <div class="box"><label>CLI ID</label><input type="text" id="cliId" oninput="look('cli')"><div id="cliN" class="name-tag">-</div></div>
-    <div class="box"><label>LP ID</label><input type="text" id="lpId" oninput="look('lp')"><div id="lpN" class="name-tag">-</div></div>
-    <div class="box"><label>Section</label><div style="display:flex;gap:2px;"><select id="fStn"></select><select id="tStn"></select></div></div>
-    <div class="box"><label>RTIS Loco CSV</label><input type="file" id="locoFile"></div>
-    <button style="background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;height:32px;" onclick="runAudit()">GENERATE AUDIT</button>
+    <div class="box"><label>CREW ID 1 (LP/ALP/CLI)</label><input type="text" id="id1" oninput="look('1')"><div id="n1" class="res-name">-</div></div>
+    <div class="box"><label>CREW ID 2 (LP/ALP/CLI)</label><input type="text" id="id2" oninput="look('2')"><div id="n2" class="res-name">-</div></div>
+    <div class="box"><label>SECTION</label><div style="display:flex;gap:2px;"><select id="fStn" style="width:50%"></select><select id="tStn" style="width:50%"></select></div></div>
+    <div class="box"><label>RTIS CSV</label><input type="file" id="rtis"></div>
+    <button style="background:#28a745;color:white;border:none;border-radius:4px;font-weight:bold;cursor:pointer;height:34px;" onclick="audit()">GENERATE REPORT</button>
 </header>
-
 <main>
     <div id="map"></div>
-    <div class="charts-row">
-        <div class="card"><h4>Journey Speed Profile</h4><canvas id="chartJ"></canvas></div>
-        <div class="card"><h4 id="brakeTitle">Braking Audit (Last Stoppage)</h4><canvas id="chartB"></canvas></div>
+    <div class="charts">
+        <div class="card"><h4>Journey Speed</h4><canvas id="cJ"></canvas></div>
+        <div class="card"><h4>Braking Audit</h4><canvas id="cB"></canvas></div>
     </div>
 </main>
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const map = L.map('map').setView([21.14, 79.08], 8);
+    const map = L.map('map').setView([21.14, 79.08], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    let masters = { crew:[], pts:[] }, active = {};
 
-    let masters = { crew:[], points:[] };
-    let activeCharts = {};
-
-    // 1. LOAD ALL MASTERS IMMEDIATELY
     window.onload = () => {
-        // Crew Master (All Crew, No name/designation left out) [cite: 2026-01-08]
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
-        
-        // Load Stations & Signals
-        const files = ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"];
-        files.forEach(f => {
-            Papa.parse(f, { download:true, header:true, complete: r => {
-                r.data.forEach(s => {
-                    let lat = parseFloat(s.Lat || s.LAT || s.Latitude);
-                    let lng = parseFloat(s.Lng || s.LNG || s.Longitude);
-                    if(lat && lng) {
-                        let isStation = f.includes('station');
-                        let marker = L.circleMarker([lat, lng], {radius: isStation?5:3, color: isStation?'orange':'blue', fillOpacity: 0.8}).addTo(map);
-                        let pName = s.Station_Name || s.Signal_Name || s.STATION;
-                        marker.bindTooltip(pName);
-                        
-                        masters.points.push({lat, lng, name: pName});
-
-                        if(isStation) {
-                            document.getElementById('fStn').add(new Option(pName, pName));
-                            document.getElementById('tStn').add(new Option(pName, pName));
-                        }
+        ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"].forEach(f => {
+            Papa.parse(f, { download:true, header:true, complete: r => r.data.forEach(s => {
+                let lat = parseFloat(s.Lat || s.LAT), lng = parseFloat(s.Lng || s.LNG), name = s.Station_Name || s.Signal_Name || s.STATION;
+                if(lat && lng) {
+                    L.circleMarker([lat, lng], {radius:f.includes('station')?5:3, color:f.includes('station')?'orange':'blue'}).addTo(map).bindTooltip(name);
+                    masters.pts.push({lat, lng, name});
+                    if(f.includes('station')) {
+                        document.getElementById('fStn').add(new Option(name, name));
+                        document.getElementById('tStn').add(new Option(name, name));
                     }
-                });
-            }});
+                }
+            })});
         });
     };
 
-    function look(t) {
-        let id = document.getElementById(t+'Id').value.toUpperCase();
-        let f = masters.crew.find(x => (x.CREW_ID || x.CLI_ID) === id);
-        document.getElementById(t+'N').innerText = f ? (f.CREW_NAME || f.CLI_NAME) + " [" + (f.DESIGNATION || 'CREW') + "]" : "-";
+    function look(num) {
+        let val = document.getElementById('id'+num).value.toUpperCase();
+        let f = masters.crew.find(x => (x.CREW_ID || x.CLI_ID) === val);
+        document.getElementById('n'+num).innerText = f ? (f.CREW_NAME || f.CLI_NAME) + " [" + (f.DESIGNATION || 'CREW') + "]" : "-";
     }
 
-    function runAudit() {
-        let file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Select RTIS File");
-
+    function audit() {
+        let file = document.getElementById('rtis').files[0];
+        if(!file) return;
         Papa.parse(file, { header:true, dynamicTyping:true, complete: r => {
-            let data = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
-            if(!data.length) return;
-
-            // Map Path
-            let path = data.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
-            L.polyline(path, {color:'red', weight:3}).addTo(map);
-            map.fitBounds(path);
-
-            // Full Journey Chart
-            draw('chartJ', data.map(x=>x.Speed), '#1a73e8', 'Speed (KMPH)');
-
-            // BRAKING AUDIT - Finding context
-            let stopIdx = data.length - 1;
-            for(let i = data.length - 1; i >= 0; i--) { if(data[i].Speed > 3) { stopIdx = i; break; } }
-            
-            // Kahan ruka? Match GPS with Master points
-            let lastLat = data[stopIdx].Latitude || data[stopIdx].lat;
-            let lastLng = data[stopIdx].Longitude || data[stopIdx].lng;
-            let nearest = masters.points.reduce((prev, curr) => {
-                let dP = Math.hypot(prev.lat - lastLat, prev.lng - lastLng);
-                let dC = Math.hypot(curr.lat - lastLat, curr.lng - lastLng);
-                return dC < dP ? curr : prev;
-            });
-
-            document.getElementById('brakeTitle').innerText = "Braking Audit: Stopped near " + nearest.name;
-            
-            let bData = data.slice(Math.max(0, stopIdx - 300), stopIdx + 5);
-            draw('chartB', bData.map(x=>x.Speed), '#d93025', 'Approach Speed');
+            let d = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
+            let path = d.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
+            L.polyline(path, {color:'red', weight:3}).addTo(map); map.fitBounds(path);
+            draw('cJ', d.map(x=>x.Speed), '#1a73e8');
+            let stop = d.length - 1;
+            for(let i=d.length-1; i>=0; i--) { if(d[i].Speed > 3) { stop = i; break; } }
+            draw('cB', d.slice(Math.max(0, stop-300), stop+10).map(x=>x.Speed), '#d93025');
         }});
     }
 
-    function draw(id, vals, clr, lbl) {
-        if(activeCharts[id]) activeCharts[id].destroy();
-        activeCharts[id] = new Chart(document.getElementById(id), {
-            type: 'line',
-            data: { labels: vals.map((_,i)=>i), datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0, fill:false}] },
-            options: { responsive:true, maintainAspectRatio:false, scales:{ x:{display:false} } }
+    function draw(id, vals, clr) {
+        if(active[id]) active[id].destroy();
+        active[id] = new Chart(document.getElementById(id), {
+            type:'line', data:{ labels:vals.map((_,i)=>i), datasets:[{data:vals, borderColor:clr, pointRadius:0, fill:false}] },
+            options:{ responsive:true, maintainAspectRatio:false, scales:{x:{display:false}} }
         });
     }
 </script>
