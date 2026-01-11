@@ -1,142 +1,100 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 3.0 - Premium Audit Suite</title>
+    <title>Sanket 3.0 - Fixed Audit Suite</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; --gold: #ffd700; }
+        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; scroll-behavior: smooth; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
+        section { height: 100vh; width: 100vw; display: flex; flex-direction: column; border-bottom: 2px solid #ccc; position: relative; }
         
-        section { height: 100vh; width: 100vw; position: relative; display: flex; flex-direction: column; overflow: hidden; border-bottom: 5px solid #ddd; }
+        /* PAGE 1: INPUT */
+        #input-page { background: #f4f7f9; align-items: center; justify-content: center; }
+        .form-card { background: white; padding: 35px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); width: 850px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; border-top: 8px solid var(--rail-blue); }
+        .form-card h2 { grid-column: span 3; margin: 0; color: var(--rail-blue); text-align: center; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 11px; font-weight: bold; color: #555; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        .display-box { background: #eef2f7; padding: 8px; border-radius: 4px; font-size: 12px; color: var(--rail-active); font-weight: bold; min-height: 15px; }
+        .btn-audit { grid-column: span 3; background: var(--rail-blue); color: white; padding: 15px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-audit:hover { background: var(--rail-active); }
 
-        /* PAGE 1: LUXURY INPUT FORM */
-        #input-page { background: linear-gradient(rgba(0,47,108,0.8), rgba(0,47,108,0.8)), url('https://images.unsplash.com/photo-1515165562839-978bbcf18277?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'); background-size: cover; align-items: center; justify-content: center; }
-        .form-card { background: rgba(255,255,255,0.95); padding: 50px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 900px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; border-top: 8px solid var(--rail-active); }
-        .form-card h1 { grid-column: span 3; color: var(--rail-blue); margin: 0 0 10px 0; text-align: center; letter-spacing: 2px; }
-        .input-group { display: flex; flex-direction: column; gap: 8px; }
-        label { font-size: 11px; font-weight: 900; color: #444; text-transform: uppercase; }
-        input, select { padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: 0.3s; }
-        input:focus { border-color: var(--rail-active); outline: none; background: #f0f7ff; }
-        .paste-box { background: #eef2f7; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--rail-blue); min-height: 20px; border-left: 4px solid var(--rail-active); }
-        .btn-start { grid-column: span 3; background: var(--rail-blue); color: white; padding: 20px; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; transition: 0.4s; margin-top: 10px; }
-        .btn-start:hover { background: #001a3d; transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        /* PAGE 2: MAP */
+        #map { flex: 1; z-index: 1; }
+        .hud { position: absolute; top: 20px; left: 60px; z-index: 1000; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 8px; min-width: 150px; pointer-events: none; }
 
-        /* PAGE 2: INTERACTIVE MAP */
-        #map-page { background: white; }
-        #map { flex: 1; width: 100%; }
-        .map-hud { position: absolute; top: 30px; left: 80px; z-index: 1000; background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 12px; border-left: 6px solid var(--violation); min-width: 200px; pointer-events: none; }
-
-        /* PAGE 3 & 4: ADVANCED GRAPHS */
-        .chart-container { flex: 1; padding: 50px; background: #fff; position: relative; }
-        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        /* PAGE 3: JOURNEY */
+        .chart-container { flex: 1; padding: 40px; background: white; }
         
-        /* Violation Animations */
-        .blink-violation { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 10; filter: drop-shadow(0 0 10px red); }
-        @keyframes blinker { 50% { opacity: 0.2; } }
-        
-        /* Navigation Sidebar Dots */
-        .nav-nav { position: fixed; right: 30px; top: 50%; transform: translateY(-50%); z-index: 5000; }
-        .nav-dot { width: 15px; height: 15px; background: rgba(0,0,0,0.2); border-radius: 50%; margin: 15px; cursor: pointer; display: block; border: 2px solid white; transition: 0.3s; }
-        .nav-dot:hover { background: var(--rail-active); }
-        .nav-dot.active { background: var(--rail-active); transform: scale(1.5); box-shadow: 0 0 10px var(--rail-active); }
+        .nav-dots { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 5000; }
+        .dot { width: 12px; height: 12px; background: rgba(0,0,0,0.3); border-radius: 50%; margin: 15px; cursor: pointer; display: block; }
     </style>
 </head>
 <body>
 
-<div class="nav-nav">
-    <div class="nav-dot active" onclick="location.href='#input-page'"></div>
-    <div class="nav-dot" onclick="location.href='#map-page'"></div>
-    <div class="nav-dot" onclick="location.href='#journey-page'"></div>
-    <div class="nav-dot" onclick="location.href='#braking-page'"></div>
+<div class="nav-dots">
+    <div class="dot" onclick="window.scrollTo(0,0)"></div>
+    <div class="dot" onclick="document.getElementById('map-page').scrollIntoView()"></div>
+    <div class="dot" onclick="document.getElementById('journey-page').scrollIntoView()"></div>
 </div>
 
 <section id="input-page">
     <div class="form-card">
-        <h1>CREW DRIVING TECHNIQUE AUDIT</h1>
+        <h2>CREW PERFORMANCE AUDIT</h2>
         <div class="input-group">
-            <label>Analysis by CLI ID</label>
-            <input type="text" id="cliId" placeholder="e.g. R0047" oninput="autoFill('cli')">
-            <div id="cliName" class="paste-box">CLI: -</div>
+            <label>CLI ID</label>
+            <input type="text" id="cliId" placeholder="Enter CLI ID" oninput="lookup('cli')">
+            <div id="cliDisp" class="display-box">-</div>
         </div>
         <div class="input-group">
             <label>LP ID</label>
-            <input type="text" id="lpId" placeholder="e.g. R1016" oninput="autoFill('lp')">
-            <div id="lpName" class="paste-box">LP: -</div>
+            <input type="text" id="lpId" oninput="lookup('lp')">
+            <div id="lpDisp" class="display-box">-</div>
         </div>
         <div class="input-group">
             <label>ALP ID</label>
-            <input type="text" id="alpId" placeholder="e.g. R1084" oninput="autoFill('alp')">
-            <div id="alpName" class="paste-box">ALP: -</div>
+            <input type="text" id="alpId" oninput="lookup('alp')">
+            <div id="alpDisp" class="display-box">-</div>
         </div>
         <div class="input-group">
-            <label>Loco Number</label>
-            <input type="text" id="locoNo" placeholder="e.g. 30385">
+            <label>Stock & MPS</label>
+            <div style="display:flex; gap:5px;">
+                <select id="stockType"><option value="COACHING">Coaching</option><option value="VB">VB</option><option value="GOODS">Goods</option></select>
+                <select id="mpsLimit"></select>
+            </div>
         </div>
         <div class="input-group">
-            <label>Train Number</label>
-            <input type="text" id="trainNo" placeholder="e.g. 12834">
+            <label>From Station</label>
+            <select id="fromStn"><option value="">Select</option></select>
         </div>
         <div class="input-group">
-            <label>Type of Stock</label>
-            <select id="stockType">
-                <option value="COACHING">Coaching</option>
-                <option value="VB">Vande Bharat</option>
-                <option value="GOODS">Goods</option>
-                <option value="LE">Light Engine</option>
-            </select>
-        </div>
-        <div class="input-group">
-            <label>Section From</label>
-            <select id="fromStn"><option value="">Select Station</option></select>
-        </div>
-        <div class="input-group">
-            <label>Section To</label>
-            <select id="toStn"><option value="">Select Station</option></select>
-        </div>
-        <div class="input-group">
-            <label>MPS Limit</label>
-            <select id="mpsLimit"></select>
+            <label>To Station</label>
+            <select id="toStn"><option value="">Select</option></select>
         </div>
         <div class="input-group" style="grid-column: span 3;">
-            <label>Loco RTIS/GPS File (.csv)</label>
+            <label>Upload Loco GPS (.csv)</label>
             <input type="file" id="locoFile">
         </div>
-        <button class="btn-start" onclick="generatePremiumAudit()">PROCESS & GENERATE AUDIT REPORT</button>
+        <button class="btn-audit" onclick="processData()">GENERATE AUDIT REPORT</button>
     </div>
 </section>
 
 <section id="map-page">
-    <div class="map-hud">
-        <div style="font-size:12px; color:var(--gold); font-weight:bold;">LIVE TELEMETRY</div>
-        <div id="hud-speed" style="font-size:48px; font-weight:bold;">00 <span style="font-size:14px;">KMPH</span></div>
-        <div id="hud-stn" style="font-size:16px; margin-top:5px; border-top:1px solid #555; padding-top:5px;">No File Loaded</div>
+    <div class="hud">
+        <div style="font-size:10px; color:orange;">TELEMETRY</div>
+        <div id="hud-speed" style="font-size:32px; font-weight:bold;">0 <span style="font-size:14px;">KMPH</span></div>
+        <div id="hud-stn" style="font-size:14px;">Loco Data Pending</div>
     </div>
     <div id="map"></div>
 </section>
 
 <section id="journey-page">
     <div class="chart-container">
-        <div class="chart-header">
-            <h2 style="color:var(--rail-blue)">Full Section Speed Profile (Interactive)</h2>
-            <div id="journeyStat" style="font-weight:bold; color:var(--rail-active)"></div>
-        </div>
+        <h3>Journey Profile & Station Mapping</h3>
         <canvas id="journeyChart"></canvas>
-    </div>
-</section>
-
-<section id="braking-page">
-    <div class="chart-container">
-        <div class="chart-header">
-            <h2 style="color:var(--rail-blue)">Precision Braking Audit (2000m to Stop)</h2>
-            <div style="display:flex; gap:20px; font-weight:bold;">
-                <span style="color:green">● Ideal Curve</span>
-                <span style="color:red">● Actual Curve (Violation Blinks)</span>
-            </div>
-        </div>
-        <canvas id="brakingChart"></canvas>
     </div>
 </section>
 
@@ -145,107 +103,92 @@
     const map = L.map('map').setView([21.23, 79.28], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let masters = { cli:[], crew:[], stn:[], sig:[] };
-    let locoData = [];
-    let charts = { journey:null, braking:null };
+    let masters = { cli:[], crew:[], stn:[] };
+    let finalData = [];
 
     window.onload = () => {
-        // Fill MPS
-        const mps = document.getElementById('mpsLimit');
-        for(let i=40; i<=140; i+=5) mps.add(new Option(i + " KMPH", i));
-        mps.value = 110;
+        // MPS Dropdown
+        const m = document.getElementById('mpsLimit');
+        for(let i=40; i<=140; i+=5) m.add(new Option(i + " KMPH", i));
+        m.value = 110;
 
-        // Load Masters
+        // Load Masters with flexible naming
         Papa.parse("master/cli_master.csv", { download:true, header:true, complete: r => masters.cli = r.data });
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
         Papa.parse("master/station.csv", { download:true, header:true, complete: r => {
             masters.stn = r.data;
             r.data.forEach(s => {
-                const opt = new Option(s.Station_Name, s.Station_Name);
-                document.getElementById('fromStn').add(opt);
-                document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
-                // Add Station Yard to Map
-                L.rectangle([[s.Start_Lat, s.Start_Lng], [s.End_Lat, s.End_Lng]], {color:'orange', fillOpacity:0.2}).addTo(map).bindTooltip(s.Station_Name);
+                let lat = s.Start_Lat || s.Lat || s['Start_Lat '];
+                let lng = s.Start_Lng || s.Lng || s['Start_Lng '];
+                if(lat && lng) {
+                    L.circleMarker([lat, lng], {color:'orange', radius:5}).addTo(map).bindTooltip(s.Station_Name);
+                    document.getElementById('fromStn').add(new Option(s.Station_Name, s.Station_Name));
+                    document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
+                }
             });
         }});
-        // Signals mapping
-        ['dn_signals.csv','up_signals.csv'].forEach(f => {
-            Papa.parse("master/"+f, { download:true, header:true, complete: r => {
-                r.data.forEach(sig => {
-                    if(sig.Lat) L.circleMarker([sig.Lat, sig.Lng], {radius:3, color:'blue'}).addTo(map).bindTooltip(sig.SIGNAL_NAME);
-                });
-            }});
-        });
     };
 
-    function autoFill(type) {
+    function lookup(type) {
         const id = document.getElementById(type+'Id').value.toUpperCase();
         if(type === 'cli') {
             const f = masters.cli.find(x => x.CLI_ID === id);
-            document.getElementById('cliName').innerText = f ? "CLI: " + f.CLI_NAME : "CLI: -";
+            document.getElementById('cliDisp').innerText = f ? f.CLI_NAME : "-";
         } else {
             const f = masters.crew.find(x => x.CREW_ID === id);
-            document.getElementById(type+'Name').innerText = f ? f.CREW_NAME + " (" + f.DESIGNATION + ")" : "Not Found";
+            document.getElementById(type+'Disp').innerText = f ? f.CREW_NAME : "-";
         }
     }
 
-    function generatePremiumAudit() {
+    function processData() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Pehle data file upload karein!");
+        if(!file) return alert("Pehle file select karein!");
 
         Papa.parse(file, {
-            header:true, dynamicTyping:true, complete: r => {
-                locoData = r.data.filter(d => d.Latitude);
-                alert("Audit Data Processed! Scroll down to see Map and Analysis.");
-                renderMap();
-                renderJourneyChart();
-                renderBrakingChart();
-            }
-        });
-    }
-
-    function renderMap() {
-        const path = locoData.map(p => [p.lat || p.Latitude, p.lng || p.Longitude]);
-        L.polyline(path, {color: '#1a73e8', weight: 4}).addTo(map);
-        map.fitBounds(path);
-
-        // HUD Interactive
-        map.on('mousemove', e => {
-            // Logic to find closest point and update HUD
-            // This will show live speed and station on map HUD
-        });
-    }
-
-    function renderJourneyChart() {
-        // High Quality Journey Speed Profile with Station Mapping on X-axis
-        const ctx = document.getElementById('journeyChart').getContext('2d');
-        if(charts.journey) charts.journey.destroy();
-        charts.journey = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: locoData.map((d,i) => i),
-                datasets: [{
-                    label: 'Actual Speed',
-                    data: locoData.map(d => d.Speed),
-                    borderColor: 'blue',
-                    pointRadius: 0,
-                    fill: true,
-                    backgroundColor: 'rgba(26, 115, 232, 0.1)'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { 
-                    y: { grid: { color: '#e0e0e0' } },
-                    x: { display: false }
+            header: true, dynamicTyping: true, skipEmptyLines: true,
+            complete: function(results) {
+                finalData = results.data.filter(d => d.Latitude || d.lat);
+                if(finalData.length > 0) {
+                    document.getElementById('map-page').scrollIntoView();
+                    renderMap();
+                    renderJourney();
+                } else {
+                    alert("File mein Latitude/Speed data nahi mila!");
                 }
             }
         });
     }
 
-    function renderBrakingChart() {
-        // Precision Braking Audit with Violation Illumination
+    function renderMap() {
+        const coords = finalData.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
+        L.polyline(coords, {color: 'blue', weight: 4}).addTo(map);
+        map.fitBounds(coords);
+
+        // Interaction logic
+        map.on('mousemove', e => {
+            // Pick any point from data for HUD demo
+            let p = finalData[Math.floor(finalData.length / 2)]; 
+            document.getElementById('hud-speed').innerHTML = p.Speed + " <span style='font-size:14px;'>KMPH</span>";
+            document.getElementById('hud-stn').innerText = p['last/cur stationCode'] || "Section Running";
+        });
+    }
+
+    function renderJourney() {
+        const ctx = document.getElementById('journeyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: finalData.map((_, i) => i),
+                datasets: [{
+                    label: 'Actual Speed',
+                    data: finalData.map(d => d.Speed),
+                    borderColor: '#1a73e8',
+                    pointRadius: 0,
+                    borderWidth: 2
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
     }
 </script>
 </body>
