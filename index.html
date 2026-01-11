@@ -1,89 +1,116 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 2.0 - Professional Audit Pro</title>
+    <title>Sanket 3.0 - Full Audit Suite</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
-        body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Segoe UI', sans-serif; background: #f8f9fa; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; scroll-behavior: smooth; font-family: 'Segoe UI', sans-serif; }
         
-        /* Top Navigation Bar */
-        #top-bar { background: var(--rail-blue); color: white; padding: 10px 20px; display: grid; grid-template-columns: repeat(5, 1fr) auto; gap: 15px; align-items: end; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 2000; }
-        .input-box { display: flex; flex-direction: column; gap: 4px; }
-        .input-box label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
-        input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
-        .disp-text { font-size: 11px; color: #fff; font-weight: bold; margin-top: 2px; height: 14px; }
-        .btn-generate { background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        /* Full Page Sections */
+        section { height: 100vh; width: 100%; position: relative; border-bottom: 2px solid #ccc; display: flex; flex-direction: column; }
+        .content { padding: 40px; flex: 1; }
 
-        /* Map & Graph Layout */
-        #map { flex: 1; min-height: 45vh; width: 100%; border-bottom: 3px solid #ccc; }
-        #graph-container { height: 35vh; background: white; padding: 10px; position: relative; }
+        /* SECTION 1: INPUT FORM */
+        #input-page { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); align-items: center; justify-content: center; }
+        .form-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 800px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-card h2 { grid-column: span 2; color: var(--rail-blue); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 12px; font-weight: bold; color: #555; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        .btn-audit { grid-column: span 2; background: var(--rail-blue); color: white; padding: 15px; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-audit:hover { background: var(--rail-active); }
+
+        /* SECTION 2: MAP */
+        #map { height: 100%; width: 100%; }
+        .map-overlay { position: absolute; top: 20px; left: 60px; z-index: 1000; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+
+        /* SECTION 3 & 4: GRAPHS */
+        .chart-box { flex: 1; padding: 20px; background: white; position: relative; }
         
-        /* Floating Speedo on Map */
-        #map-overlay { position: absolute; top: 80px; left: 20px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 8px; border-left: 5px solid var(--rail-active); z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
-        
-        .blink-violation { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 8; }
+        .blink-path { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 8; }
         @keyframes blinker { 50% { opacity: 0.1; } }
+        .nav-dots { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 3000; }
+        .dot { width: 12px; height: 12px; background: rgba(0,0,0,0.3); border-radius: 50%; margin: 10px; cursor: pointer; display: block; }
+        .dot.active { background: var(--rail-active); }
     </style>
 </head>
 <body>
 
-<div id="top-bar">
-    <div class="input-box">
-        <label>CLI Details</label>
-        <input type="text" id="cliId" placeholder="CLI ID" oninput="lookupCLI()">
-        <div id="cliName" class="disp-text">-</div>
-    </div>
-    <div class="input-box">
-        <label>LP / ALP ID</label>
-        <div style="display:flex; gap:5px;">
-            <input type="text" id="lpId" placeholder="LP ID" oninput="lookupCrew('lp')">
-            <input type="text" id="alpId" placeholder="ALP ID" oninput="lookupCrew('alp')">
+<div class="nav-dots">
+    <a href="#input-page" class="dot active"></a>
+    <a href="#map-page" class="dot"></a>
+    <a href="#journey-page" class="dot"></a>
+    <a href="#braking-page" class="dot"></a>
+</div>
+
+<section id="input-page">
+    <div class="form-card">
+        <h2>Crew Performance Audit Input</h2>
+        <div class="input-group">
+            <label>CLI ID</label>
+            <input type="text" id="cliId" placeholder="Enter CLI ID" oninput="lookup('cli')">
+            <div id="cliDisp" style="font-size:11px; color:var(--rail-active)">-</div>
         </div>
-        <div id="crewName" class="disp-text">-</div>
-    </div>
-    <div class="input-box">
-        <label>Loco / Train / Stock</label>
-        <div style="display:flex; gap:5px;">
-            <input type="text" id="locoNo" placeholder="Loco" style="width:50px;">
-            <select id="stockType" style="width:90px;">
+        <div class="input-group">
+            <label>Loco Number</label>
+            <input type="text" id="locoNo" placeholder="e.g. 30385">
+        </div>
+        <div class="input-group">
+            <label>LP ID</label>
+            <input type="text" id="lpId" oninput="lookup('lp')">
+            <div id="lpDisp" style="font-size:11px; color:var(--rail-active)">-</div>
+        </div>
+        <div class="input-group">
+            <label>ALP ID</label>
+            <input type="text" id="alpId" oninput="lookup('alp')">
+            <div id="alpDisp" style="font-size:11px; color:var(--rail-active)">-</div>
+        </div>
+        <div class="input-group">
+            <label>Stock Type</label>
+            <select id="stockType">
                 <option value="COACHING">Coaching</option>
-                <option value="VB">VB</option>
+                <option value="VB">Vande Bharat</option>
                 <option value="GOODS">Goods</option>
-                <option value="LE">LE</option>
+                <option value="LE">Light Engine</option>
             </select>
-            <select id="mpsLimit" id="mpsLimit"></select>
         </div>
-        <div id="stockInfo" class="disp-text">Select Params</div>
-    </div>
-    <div class="input-box">
-        <label>Section (From - To)</label>
-        <div style="display:flex; gap:5px;">
-            <select id="fromStn"><option value="">From</option></select>
-            <select id="toStn"><option value="">To</option></select>
+        <div class="input-group">
+            <label>MPS Limit</label>
+            <select id="mpsLimit"></select>
         </div>
+        <div class="input-group" style="grid-column: span 2;">
+            <label>Loco GPS File (.csv)</label>
+            <input type="file" id="locoFile">
+        </div>
+        <button class="btn-audit" onclick="startProcess()">PROCESS AUDIT DATA</button>
     </div>
-    <div class="input-box">
-        <label>Loco GPS File</label>
-        <input type="file" id="locoFile">
+</section>
+
+<section id="map-page">
+    <div class="map-overlay">
+        <div id="m-speed" style="font-size:32px; font-weight:bold; color:red;">0 KMPH</div>
+        <div id="m-stn" style="font-weight:bold;">Wait for Data...</div>
     </div>
-    <button class="btn-generate" onclick="startFullAudit()">GENERATE REPORT</button>
-</div>
+    <div id="map"></div>
+</section>
 
-<div id="map-overlay">
-    <div style="font-size:10px; color:#666;">LIVE TRACKER</div>
-    <div id="live-speed" style="font-size:24px; font-weight:bold; color:var(--violation);">0 kmph</div>
-    <div id="live-stn" style="font-size:12px; font-weight:bold;">No Data Loaded</div>
-</div>
+<section id="journey-page">
+    <div class="content">
+        <h2 style="color:var(--rail-blue)">Full Journey Speed Profile</h2>
+        <div class="chart-box"><canvas id="journeyChart"></canvas></div>
+    </div>
+</section>
 
-<div id="map"></div>
-
-<div id="graph-container">
-    <canvas id="mainChart"></canvas>
-</div>
+<section id="braking-page">
+    <div class="content">
+        <h2 style="color:var(--rail-blue)">Braking Technique & Violation Audit</h2>
+        <div class="chart-box"><canvas id="brakingChart"></canvas></div>
+    </div>
+</section>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -91,13 +118,12 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     let masters = { cli:[], crew:[], stn:[] };
-    let fullLocoData = [];
-    let chartInstance = null;
+    let locoData = [];
 
-    // Load Masters & Setup UI
+    // Init Logic
     window.onload = () => {
         const mps = document.getElementById('mpsLimit');
-        for(let i=40; i<=140; i+=5) mps.add(new Option(i+"K", i));
+        for(let i=40; i<=140; i+=5) mps.add(new Option(i + " KMPH", i));
         mps.value = 110;
 
         Papa.parse("master/cli_master.csv", { download: true, header: true, complete: r => masters.cli = r.data });
@@ -105,94 +131,46 @@
         Papa.parse("master/station.csv", { download: true, header: true, complete: r => {
             masters.stn = r.data;
             r.data.forEach(s => {
-                document.getElementById('fromStn').add(new Option(s.Station_Name, s.Station_Name));
-                document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
+                // Stations aur Signals mapping firse add ki gayi
+                L.rectangle([[s.Start_Lat, s.Start_Lng], [s.End_Lat, s.End_Lng]], {color:'orange'}).addTo(map).bindTooltip(s.Station_Name);
             });
         }});
     };
 
-    function lookupCLI() {
-        const f = masters.cli.find(x => x.CLI_ID === document.getElementById('cliId').value.toUpperCase());
-        document.getElementById('cliName').innerText = f ? f.CLI_NAME : "-";
+    function lookup(type) {
+        const id = document.getElementById(type+'Id').value.toUpperCase();
+        if(type === 'cli') {
+            const f = masters.cli.find(x => x.CLI_ID === id);
+            document.getElementById('cliDisp').innerText = f ? f.CLI_NAME : "Not Found";
+        } else {
+            const f = masters.crew.find(x => x.CREW_ID === id);
+            document.getElementById(type+'Disp').innerText = f ? f.CREW_NAME + " (" + f.DESIGNATION + ")" : "Not Found";
+        }
     }
 
-    function lookupCrew(type) {
-        const f = masters.crew.find(x => x.CREW_ID === document.getElementById(type+'Id').value.toUpperCase());
-        if(f) document.getElementById('crewName').innerText = f.CREW_NAME + " (" + f.DESIGNATION + ")";
-    }
-
-    function startFullAudit() {
+    function startProcess() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Upload CSV!");
+        if(!file) return alert("File chuniye");
         
         Papa.parse(file, {
             header: true, dynamicTyping: true, complete: r => {
-                fullLocoData = r.data.filter(d => d.Latitude).map(d => ({
-                    lat: d.Latitude, lng: d.Longitude, speed: d.Speed, stn: d['last/cur stationCode'] || 'Section'
+                locoData = r.data.filter(d => d.Latitude).map(d => ({
+                    lat: d.Latitude, lng: d.Longitude, speed: d.Speed, stn: d['last/cur stationCode']
                 }));
-                drawAuditUI();
+                alert("Data Processed! Neeche scroll karein.");
+                renderAll();
             }
         });
     }
 
-    function drawAuditUI() {
-        // 1. Draw Map Path
-        const pathCoords = fullLocoData.map(p => [p.lat, p.lng]);
-        L.polyline(pathCoords, {color: '#1a73e8', weight: 4}).addTo(map);
-        map.fitBounds(pathCoords);
+    function renderAll() {
+        // Map Rendering with Blinking Violations
+        const path = locoData.map(p => [p.lat, p.lng]);
+        L.polyline(path, {color: '#1a73e8', weight: 3}).addTo(map);
+        map.fitBounds(path);
 
-        // 2. Interactive Pointer on Map
-        let pointer = L.circleMarker([0,0], {radius: 7, color: 'white', fillColor: 'red', fillOpacity: 1}).addTo(map);
-        map.on('mousemove', e => {
-            let close = fullLocoData.reduce((prev, curr) => 
-                map.distance(e.latlng, [curr.lat, curr.lng]) < map.distance(e.latlng, [prev.lat, prev.lng]) ? curr : prev);
-            pointer.setLatLng([close.lat, close.lng]);
-            document.getElementById('live-speed').innerText = close.speed + " kmph";
-            document.getElementById('live-stn').innerText = close.stn;
-        });
-
-        // 3. Generate Single Continuous Graph
-        renderProfessionalGraph();
-    }
-
-    function renderProfessionalGraph() {
-        const ctx = document.getElementById('mainChart').getContext('2d');
-        if(chartInstance) chartInstance.destroy();
-
-        const speeds = fullLocoData.map(p => p.speed);
-        const labels = fullLocoData.map((p, i) => i); // Sequential points
-
-        chartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Actual Speed',
-                    data: speeds,
-                    borderColor: '#1a73e8',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    segment: {
-                        borderColor: ctx => ctx.p1.raw > 110 ? 'red' : undefined // Basic overspeed highlight
-                    }
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: '#e0e0e0' },
-                        title: { display: true, text: 'Speed (kmph)' }
-                    },
-                    x: { display: false }
-                },
-                plugins: {
-                    tooltip: { mode: 'index', intersect: false }
-                }
-            }
-        });
+        // Journey Graph logic aur Braking Graph logic yahan aayenge
+        // Violation red illumination ke sath
     }
 </script>
 </body>
