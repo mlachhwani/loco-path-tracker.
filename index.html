@@ -1,91 +1,106 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 2.0 - Real-Time Crew Audit</title>
+    <title>Sanket 2.0 - Precision Audit</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --rail-blue: #1a73e8; --rail-red: #d93025; }
-        body { margin: 0; display: flex; font-family: 'Segoe UI', sans-serif; height: 100vh; background: #f0f2f5; }
-        #sidebar { width: 380px; background: white; border-right: 1px solid #ccc; padding: 20px; overflow-y: auto; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
-        #main { flex-grow: 1; display: flex; flex-direction: column; }
-        #map { flex-grow: 1; }
-        #analysis-panel { height: 350px; background: white; border-top: 4px solid #1a73e8; padding: 15px; overflow-y: auto; }
+        body { margin: 0; display: flex; font-family: 'Segoe UI', Arial, sans-serif; height: 100vh; background: #f4f6f9; }
         
-        .id-input-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        .display-box { background: #e8f0fe; padding: 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #1a73e8; min-height: 18px; }
+        /* Sidebar Styles */
+        #sidebar { width: 380px; background: white; border-right: 1px solid #ccc; padding: 20px; overflow-y: auto; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 12px; }
         label { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; }
-        input, select { width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; }
-        .violation-row { background: #fee; color: #d93025; font-weight: bold; }
-        .btn-audit { width: 100%; background: #1a73e8; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 15px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; font-size: 13px; }
+        .display-box { background: #eef2f7; padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #333; margin-top: 4px; border-left: 3px solid var(--rail-blue); min-height: 16px; }
+        
+        /* Main UI */
+        #main { flex-grow: 1; display: flex; flex-direction: column; }
+        #map { flex-grow: 1; z-index: 1; }
+        #analysis-panel { height: 320px; background: white; border-top: 4px solid var(--rail-blue); padding: 15px; overflow-y: auto; display: none; box-shadow: 0 -5px 15px rgba(0,0,0,0.1); }
+        
+        .btn-audit { width: 100%; background: var(--rail-blue); color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 15px; }
+        .violation-text { color: var(--rail-red); font-weight: bold; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.3; } }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        th { background: #f8f9fa; padding: 8px; text-align: left; border-bottom: 2px solid #dee2e6; }
+        td { padding: 8px; border-bottom: 1px solid #eee; }
+        .bg-violation { background-color: #fff5f5; border-left: 4px solid var(--rail-red); }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h3>Audit Dashboard</h3>
+    <h3 style="color:var(--rail-blue); margin-top:0;">Audit Dashboard</h3>
     
     <div class="form-group">
         <label>CLI ID</label>
-        <div class="id-input-group">
-            <input type="text" id="cliId" placeholder="Enter CLI ID (e.g. R0047)" onchange="lookupCLI()">
-        </div>
-        <div id="cliNameDisp" class="display-box">Name: -</div>
+        <input type="text" id="cliId" placeholder="Enter CLI ID" oninput="lookupCLI()">
+        <div id="cliDisp" class="display-box">CLI Name: -</div>
     </div>
 
     <div class="form-group">
         <label>LP ID</label>
-        <input type="text" id="lpId" placeholder="Enter LP ID" onchange="lookupCrew('lp')">
-        <div id="lpNameDisp" class="display-box">LP: -</div>
+        <input type="text" id="lpId" placeholder="Enter LP ID" oninput="lookupCrew('lp')">
+        <div id="lpDisp" class="display-box">LP: - | Desig: -</div>
     </div>
+
     <div class="form-group">
         <label>ALP ID</label>
-        <input type="text" id="alpId" placeholder="Enter ALP ID" onchange="lookupCrew('alp')">
-        <div id="alpNameDisp" class="display-box">ALP: -</div>
+        <input type="text" id="alpId" placeholder="Enter ALP ID" oninput="lookupCrew('alp')">
+        <div id="alpDisp" class="display-box">ALP: -</div>
     </div>
 
-    <hr>
+    <div class="form-group" style="display:flex; gap:8px;">
+        <div style="flex:1;"><label>Loco No</label><input type="text" id="locoNo"></div>
+        <div style="flex:1;"><label>Train No</label><input type="text" id="trainNo"></div>
+    </div>
+
     <div class="form-group">
-        <label>Section Selection (From - To)</label>
+        <label>Stock Type</label>
+        <select id="stockType">
+            <option value="COACHING">Coaching</option>
+            <option value="VB">Vande Bharat</option>
+            <option value="GOODS">Goods</option>
+            <option value="LE">Light Engine</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Select MPS (KMPH)</label>
+        <select id="mpsLimit">
+            </select>
+    </div>
+
+    <div class="form-group">
+        <label>Section (From - To)</label>
         <div style="display:flex; gap:5px;">
-            <select id="fromStn"><option>From Station</option></select>
-            <select id="toStn"><option>To Station</option></select>
+            <select id="fromStn"><option value="">From</option></select>
+            <select id="toStn"><option value="">To</option></select>
         </div>
     </div>
 
     <div class="form-group">
-        <label>Stock & MPS</label>
-        <div style="display:flex; gap:5px;">
-            <select id="stockType">
-                <option value="COACHING">Coaching</option>
-                <option value="VB">Vande Bharat</option>
-                <option value="GOODS">Goods</option>
-                <option value="LE">Light Engine</option>
-            </select>
-            <select id="mpsLimit">
-                <option value="110">110 Kmph</option>
-                <option value="130">130 Kmph</option>
-                <option value="100">100 Kmph</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <label>Loco File</label>
+        <label>Upload Loco GPS File (.csv)</label>
         <input type="file" id="locoFile" accept=".csv">
     </div>
 
-    <button class="btn-audit" onclick="runRealAnalysis()">GENERATE REAL REPORT</button>
+    <button class="btn-audit" onclick="startAudit()">GENERATE ADVANCED AUDIT</button>
 </div>
 
 <div id="main">
     <div id="map"></div>
-    <div id="analysis-panel" style="display:none;">
-        <h4 id="auditHeader">Braking Tech Analysis (Real Data)</h4>
-        <canvas id="brakingChart" style="max-height: 180px;"></canvas>
-        <div id="auditResults"></div>
+    <div id="analysis-panel">
+        <div style="display:flex; justify-content:space-between;">
+            <h4 style="margin:0;">Braking Audit & Tech Results</h4>
+            <div id="mpsSummary" style="font-weight:bold; color:var(--rail-blue);"></div>
+        </div>
+        <div style="height:150px;"><canvas id="brakingChart"></canvas></div>
+        <div id="auditTable"></div>
     </div>
 </div>
 
@@ -94,96 +109,104 @@
     const map = L.map('map').setView([21.23, 79.28], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let cliMaster = [], crewMaster = [], stationMaster = [];
+    let cliMaster = [], crewMaster = [], stnMaster = [], locoPoints = [];
     let brakingChart = null;
 
-    // Load Masters from your folder
+    // Initialize Page
     window.onload = () => {
+        // Fill MPS Dropdown (40 to 140 with 5kmph gap)
+        const mpsSel = document.getElementById('mpsLimit');
+        for(let i=40; i<=140; i+=5) {
+            let opt = new Option(i + " KMPH", i);
+            mpsSel.add(opt);
+        }
+        mpsSel.value = 110;
+
+        // Load Masters
         Papa.parse("master/cli_master.csv", { download: true, header: true, complete: r => cliMaster = r.data });
         Papa.parse("master/crew_master.csv", { download: true, header: true, complete: r => crewMaster = r.data });
         Papa.parse("master/station.csv", { download: true, header: true, complete: r => {
-            stationMaster = r.data;
-            const from = document.getElementById('fromStn'), to = document.getElementById('toStn');
-            r.data.forEach(s => {
-                let opt = `<option value="${s.Station_Name}">${s.Station_Name}</option>`;
-                from.innerHTML += opt; to.innerHTML += opt;
-            });
+            stnMaster = r.data;
+            const f = document.getElementById('fromStn'), t = document.getElementById('toStn');
+            r.data.forEach(s => { f.add(new Option(s.Station_Name, s.Station_Name)); t.add(new Option(s.Station_Name, s.Station_Name)); });
         }});
     };
 
     function lookupCLI() {
-        const val = document.getElementById('cliId').value.toUpperCase();
-        const found = cliMaster.find(c => c.CLI_ID === val);
-        document.getElementById('cliNameDisp').innerText = found ? "Name: " + found.CLI_NAME : "Not Found";
+        const id = document.getElementById('cliId').value.toUpperCase();
+        const found = cliMaster.find(x => x.CLI_ID === id);
+        document.getElementById('cliDisp').innerText = found ? "CLI Name: " + found.CLI_NAME : "CLI Name: -";
     }
 
     function lookupCrew(type) {
-        const val = document.getElementById(type + 'Id').value.toUpperCase();
-        const found = crewMaster.find(c => c.CREW_ID === val);
-        document.getElementById(type + 'NameDisp').innerText = found ? found.CREW_NAME + " (" + found.DESIGNATION + ")" : "Not Found";
+        const id = document.getElementById(type + 'Id').value.toUpperCase();
+        const found = crewMaster.find(x => x.CREW_ID === id);
+        const disp = document.getElementById(type + 'Disp');
+        if(found) {
+            disp.innerText = (type==='lp' ? "LP: " : "ALP: ") + found.CREW_NAME + " | Desig: " + found.DESIGNATION;
+        } else {
+            disp.innerText = (type==='lp' ? "LP: -" : "ALP: -");
+        }
     }
 
-    function runRealAnalysis() {
+    function startAudit() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Loco data file chuniye");
+        if(!file) return alert("Pehle Loco file upload karein!");
 
         Papa.parse(file, {
-            header: true, dynamicTyping: true, complete: r => {
-                const data = r.data.filter(d => d.Latitude);
-                processStops(data);
+            header: true, dynamicTyping: true, skipEmptyLines: true,
+            complete: function(results) {
+                locoPoints = results.data.filter(d => d.Latitude && d.Longitude);
+                runBrakingLogic();
                 document.getElementById('analysis-panel').style.display = 'block';
             }
         });
     }
 
-    function processStops(data) {
-        // ACTUAL LOGIC: Speed 0 detection
-        let stops = [];
-        for(let i=1; i<data.length; i++) {
-            if(data[i].Speed === 0 && data[i-1].Speed > 0) {
-                stops.push(data[i]);
-            }
-        }
-
-        // Display results for the FIRST actual stop found in data
-        if(stops.length > 0) {
-            let actualStop = stops[0];
-            let stn = actualStop['last/cur stationCode'] || "Unknown Point";
-            
-            // Logic to calculate speed at 2000m/1000m based on timestamps
-            // (Using placeholder for visual demo, but linked to stop detection)
-            renderBrakingChart([105, 95, 82, 40, 0]); 
-            
-            document.getElementById('auditResults').innerHTML = `
-                <table>
-                    <tr><th>Location</th><th>Speed @2000m</th><th>Speed @1000m</th><th>Status</th></tr>
-                    <tr class="violation-row">
-                        <td>Stop at ${stn}</td>
-                        <td>105 kmph</td><td>82 kmph</td>
-                        <td>⚠️ VIOLATION (Standard: 60@1000m)</td>
-                    </tr>
-                </table>`;
-        } else {
-            document.getElementById('auditResults').innerHTML = "No stops detected in the provided file.";
-        }
+    function getDist(lat1, lon1, lat2, lon2) {
+        const R = 6371e3; // meters
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
-    function renderBrakingChart(speedPoints) {
-        const ctx = document.getElementById('brakingChart').getContext('2d');
-        if(brakingChart) brakingChart.destroy();
-        brakingChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['2000m', '1500m', '1000m', '500m', '0m'],
-                datasets: [{
-                    label: 'Actual Speed (kmph)',
-                    data: speedPoints,
-                    borderColor: 'red',
-                    fill: false,
-                    tension: 0.4
-                }]
+    function runBrakingLogic() {
+        const stock = document.getElementById('stockType').value;
+        const rules = {
+            'VB': { m2000: 110, m1000: 90 },
+            'COACHING': { m2000: 100, m1000: 60 },
+            'GOODS': { m2000: 55, m1000: 40 },
+            'LE': { m2000: 90, m1000: 60 }
+        };
+        const rule = rules[stock];
+        let tableHtml = `<table><tr><th>Stoppage Location</th><th>Speed @2000m</th><th>Speed @1000m</th><th>Audit Result</th></tr>`;
+
+        // Logic to find actual stops in loco data
+        let stopIdx = -1;
+        for(let i=5; i<locoPoints.length; i++) {
+            if(locoPoints[i].Speed === 0 && locoPoints[i-1].Speed > 0) {
+                stopIdx = i;
+                let s1000 = -1, s2000 = -1;
+                let d = 0;
+                for(let j=i; j>0; j--) {
+                    d += getDist(locoPoints[j].Latitude, locoPoints[j].Longitude, locoPoints[j-1].Latitude, locoPoints[j-1].Longitude);
+                    if(s1000 === -1 && d >= 1000) s1000 = locoPoints[j].Speed;
+                    if(s2000 === -1 && d >= 2000) s2000 = locoPoints[j].Speed;
+                    if(d >= 2000) break;
+                }
+
+                const isV = (s1000 > rule.m1000 || s2000 > rule.m2000);
+                tableHtml += `<tr class="${isV ? 'bg-violation' : ''}">
+                    <td>Stop at ${locoPoints[i]['last/cur stationCode'] || 'Section Point'}</td>
+                    <td>${s2000} kmph</td><td>${s1000} kmph</td>
+                    <td class="${isV ? 'violation-text' : ''}">${isV ? '⚠️ VIOLATION' : '✅ OK'}</td>
+                </tr>`;
             }
-        });
+        }
+        document.getElementById('auditTable').innerHTML = tableHtml + "</table>";
     }
 </script>
 </body>
