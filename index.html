@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 6.0 - Final Master Audit</title>
+    <title>Sanket 6.1 - Final Master Audit</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -45,28 +45,27 @@
     const map = L.map('map').setView([21.14, 79.08], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let masters = { crew:[], stn:[] };
+    let masters = { crew:[] };
     let activeCharts = {};
 
-    // Load All 5 Master Files Automatically
     window.onload = () => {
+        // Load Crew Master for Names
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
         
-        const signalFiles = ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"];
-        signalFiles.forEach(file => {
-            Papa.parse(file, { download:true, header:true, complete: r => {
+        // Load 5 Signal/Station Master files
+        const files = ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"];
+        files.forEach(f => {
+            Papa.parse(f, { download:true, header:true, complete: r => {
                 r.data.forEach(s => {
-                    let lat = parseFloat(s.Lat || s.LAT || s.Latitude);
-                    let lng = parseFloat(s.Lng || s.LNG || s.Longitude);
+                    let lat = parseFloat(s.Lat || s.LAT);
+                    let lng = parseFloat(s.Lng || s.LNG);
                     if(lat && lng) {
-                        let color = file.includes('station') ? 'orange' : 'blue';
-                        L.circleMarker([lat, lng], {radius:4, color: color, fillOpacity: 0.8}).addTo(map)
-                         .bindTooltip(s.Station_Name || s.Signal_Name || "Point");
-                        
-                        if(file.includes('station')) {
-                            const name = s.Station_Name || s.STATION;
-                            document.getElementById('fStn').add(new Option(name, name));
-                            document.getElementById('tStn').add(new Option(name, name));
+                        let clr = f.includes('station') ? 'orange' : 'blue';
+                        L.circleMarker([lat, lng], {radius:4, color: clr}).addTo(map).bindTooltip(s.Station_Name || s.Signal_Name || "Point");
+                        if(f.includes('station')) {
+                            const n = s.Station_Name || s.STATION;
+                            document.getElementById('fStn').add(new Option(n, n));
+                            document.getElementById('tStn').add(new Option(n, n));
                         }
                     }
                 });
@@ -82,26 +81,20 @@
 
     function runAudit() {
         let file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Select RTIS File First");
-        Papa.parse(file, { header:true, dynamicTyping:true, skipEmptyLines:true, complete: r => {
+        if(!file) return alert("Select RTIS File");
+        Papa.parse(file, { header:true, dynamicTyping:true, complete: r => {
             let data = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
-            if(data.length === 0) return alert("No valid GPS/Speed data found");
-
-            // Map Plotting
             let path = data.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
             L.polyline(path, {color:'red', weight:3}).addTo(map);
             map.fitBounds(path);
 
-            // Journey Chart
-            draw('chartJ', data.map(x=>x.Speed), '#1a73e8', 'Full Journey');
+            draw('chartJ', data.map(x=>x.Speed), '#1a73e8', 'KMPH');
 
-            // BRAKING FIX: Find the last point where speed was > 5 KMPH and slice 200 points before it
-            let lastMovingIdx = data.length - 1;
-            for(let i = data.length - 1; i >= 0; i--) {
-                if(data[i].Speed > 5) { lastMovingIdx = i; break; }
-            }
-            let bData = data.slice(Math.max(0, lastMovingIdx - 250), lastMovingIdx + 20);
-            draw('chartB', bData.map(x=>x.Speed), '#d93025', 'Braking Curve');
+            // BRAKING LOGIC: Search back for moving data
+            let stop = data.length - 1;
+            for(let i = data.length - 1; i >= 0; i--) { if(data[i].Speed > 5) { stop = i; break; } }
+            let bData = data.slice(Math.max(0, stop - 250), stop + 10);
+            draw('chartB', bData.map(x=>x.Speed), '#d93025', 'Braking');
         }});
     }
 
@@ -109,16 +102,8 @@
         if(activeCharts[id]) activeCharts[id].destroy();
         activeCharts[id] = new Chart(document.getElementById(id), {
             type: 'line',
-            data: { 
-                labels: vals.map((_,i)=>i), 
-                datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0, borderWidth: 2, fill: false}] 
-            },
-            options: { 
-                responsive:true, 
-                maintainAspectRatio:false, 
-                scales:{ x:{display:false}, y:{beginAtZero:true} },
-                plugins: { legend: { display: false } }
-            }
+            data: { labels: vals.map((_,i)=>i), datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0, fill:false}] },
+            options: { responsive:true, maintainAspectRatio:false, scales:{ x:{display:false} } }
         });
     }
 </script>
