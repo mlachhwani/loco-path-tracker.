@@ -1,103 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 3.0 - Ultimate Stable</title>
+    <title>Sanket 3.1 - Stable Audit</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
-        body, html { margin: 0; padding: 0; height: 100%; scroll-behavior: smooth; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
-        section { height: 100vh; width: 100%; display: flex; flex-direction: column; border-bottom: 2px solid #ccc; position: relative; }
+        :root { --rail: #002f6c; --active: #1a73e8; }
+        body, html { margin: 0; padding: 0; scroll-behavior: smooth; font-family: sans-serif; overflow-x: hidden; }
+        section { height: 100vh; width: 100%; display: flex; flex-direction: column; border-bottom: 2px solid #ddd; position: relative; }
         
-        /* Form Page */
-        #input-page { background: #e9ecef; align-items: center; justify-content: center; }
-        .form-card { background: white; padding: 40px; border-radius: 15px; width: 850px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); border-top: 10px solid var(--rail-blue); }
-        .form-card h1 { grid-column: span 3; text-align: center; color: var(--rail-blue); margin-top: 0; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        input, select { padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
-        .res-box { background: #f1f3f4; padding: 10px; border-radius: 6px; font-weight: bold; font-size: 13px; color: var(--rail-active); border-left: 4px solid var(--rail-active); min-height: 18px; }
-        .btn-run { grid-column: span 3; background: #28a745; color: white; padding: 18px; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; }
+        /* Input Page */
+        #input-page { background: #f0f2f5; justify-content: center; align-items: center; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 850px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .card h2 { grid-column: span 3; text-align: center; color: var(--rail); margin: 0 0 10px 0; }
+        .group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 11px; font-weight: bold; color: #666; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        .res { background: #eef2f7; padding: 8px; border-radius: 4px; font-size: 12px; color: var(--active); font-weight: bold; min-height: 15px; }
+        .btn { grid-column: span 3; background: #28a745; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
 
-        /* Map HUD */
+        /* HUD & UI */
         #map { flex: 1; width: 100%; }
-        .hud { position: absolute; top: 20px; left: 70px; z-index: 1000; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 10px; border-left: 5px solid red; pointer-events: none; }
-
-        /* Chart Pages */
-        .chart-area { flex: 1; padding: 40px; background: white; }
-        .nav-dots { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 2000; }
-        .dot { width: 12px; height: 12px; background: #bbb; border-radius: 50%; margin: 15px; cursor: pointer; display: block; border: 2px solid white; }
+        .hud { position: absolute; top: 20px; left: 60px; z-index: 1000; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 8px; border-left: 4px solid red; pointer-events: none; }
+        .chart-container { flex: 1; padding: 30px; background: white; }
+        
+        .dots { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 2000; }
+        .dot { width: 12px; height: 12px; background: #999; border-radius: 50%; margin: 15px; cursor: pointer; display: block; border: 2px solid white; }
     </style>
 </head>
 <body>
 
-<div class="nav-dots">
-    <div class="dot" onclick="location.href='#input-page'"></div>
-    <div class="dot" onclick="location.href='#map-page'"></div>
-    <div class="dot" onclick="location.href='#journey-page'"></div>
-    <div class="dot" onclick="location.href='#braking-page'"></div>
+<div class="dots">
+    <div class="dot" onclick="window.scrollTo(0,0)"></div>
+    <div class="dot" onclick="document.getElementById('map-page').scrollIntoView()"></div>
+    <div class="dot" onclick="document.getElementById('j-page').scrollIntoView()"></div>
+    <div class="dot" onclick="document.getElementById('b-page').scrollIntoView()"></div>
 </div>
 
 <section id="input-page">
-    <div class="form-card">
-        <h1>SANKET 3.0 | STABLE</h1>
-        <div class="input-group">
-            <label>CLI ID</label>
-            <input type="text" id="cliId" placeholder="e.g. R0047" oninput="findMaster('cli')">
-            <div id="cliName" class="res-box">-</div>
-        </div>
-        <div class="input-group">
-            <label>LP ID</label>
-            <input type="text" id="lpId" oninput="findMaster('lp')">
-            <div id="lpName" class="res-box">-</div>
-        </div>
-        <div class="input-group">
-            <label>ALP ID</label>
-            <input type="text" id="alpId" oninput="findMaster('alp')">
-            <div id="alpName" class="res-box">-</div>
-        </div>
-        <div class="input-group">
-            <label>MPS Limit</label>
-            <select id="mpsLimit"></select>
-        </div>
-        <div class="input-group">
-            <label>Stock Type</label>
-            <select id="stock"><option value="COACHING">Coaching</option><option value="VB">VB</option><option value="GOODS">Goods</option></select>
-        </div>
-        <div class="input-group">
-            <label>Section</label>
-            <select id="fromStn"><option value="">From Station</option></select>
-        </div>
-        <div class="input-group" style="grid-column: span 3;">
-            <label>Loco GPS File (CSV)</label>
-            <input type="file" id="locoFile">
-        </div>
-        <button class="btn-run" onclick="startAudit()">ANALYZE & SCROLL</button>
+    <div class="card">
+        <h2>SANKET 3.1 | STABLE</h2>
+        <div class="group"><label>CLI ID</label><input type="text" id="cliId" oninput="lookup('cli')"><div id="cliN" class="res">-</div></div>
+        <div class="group"><label>LP ID</label><input type="text" id="lpId" oninput="lookup('lp')"><div id="lpN" class="res">-</div></div>
+        <div class="group"><label>ALP ID</label><input type="text" id="alpId" oninput="lookup('alp')"><div id="alpN" class="res">-</div></div>
+        <div class="group"><label>Stock</label><select id="stock"><option>COACHING</option><option>VB</option><option>GOODS</option></select></div>
+        <div class="group"><label>From Stn</label><select id="fromStn"><option value="">Select</option></select></div>
+        <div class="group"><label>To Stn</label><select id="toStn"><option value="">Select</option></select></div>
+        <div class="group" style="grid-column: span 3;"><label>Loco GPS File</label><input type="file" id="locoFile"></div>
+        <button class="btn" onclick="start()">PROCESS REPORT</button>
     </div>
 </section>
 
 <section id="map-page">
     <div class="hud">
-        <div id="hud-spd" style="font-size:36px; font-weight:bold;">00 <small>KMPH</small></div>
-        <div id="hud-stn" style="font-size:14px; color:#ccc;">Section Running</div>
+        <div id="h-spd" style="font-size:32px; font-weight:bold;">00 KMPH</div>
+        <div id="h-stn">No Data</div>
     </div>
     <div id="map"></div>
 </section>
 
-<section id="journey-page">
-    <div class="chart-area">
-        <h2>Full Section Speed Profile</h2>
-        <canvas id="jChart"></canvas>
-    </div>
-</section>
-
-<section id="braking-page">
-    <div class="chart-area">
-        <h2>Braking Violation Audit (Last Stoppage)</h2>
-        <canvas id="bChart"></canvas>
-    </div>
-</section>
+<section id="j-page"><div class="chart-container"><h3>Full Journey Speed</h3><canvas id="jChart"></canvas></div></section>
+<section id="b-page"><div class="chart-container"><h3>Braking Technique (Final Stop)</h3><canvas id="bChart"></canvas></div></section>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -105,85 +70,74 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     
     let db = { cli:[], crew:[], stn:[] };
-    let mainData = [];
+    let raw = [];
     let charts = {};
 
     window.onload = () => {
-        const mps = document.getElementById('mpsLimit');
-        for(let i=40; i<=140; i+=5) mps.add(new Option(i+" KMPH", i));
-        mps.value = 110;
-
-        // LOAD ALL MASTERS
         Papa.parse("master/cli_master.csv", { download:true, header:true, complete: r => db.cli = r.data });
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => db.crew = r.data });
         Papa.parse("master/station.csv", { download:true, header:true, complete: r => {
             db.stn = r.data;
             r.data.forEach(s => {
-                let lat = s.Start_Lat || s.Lat;
-                let lng = s.Start_Lng || s.Lng;
+                let lat = s.Start_Lat || s.Lat || s.LAT;
+                let lng = s.Start_Lng || s.Lng || s.LNG;
                 if(lat && lng) {
-                    L.circleMarker([lat, lng], {radius:6, color:'orange'}).addTo(map).bindTooltip(s.Station_Name);
+                    L.circleMarker([lat, lng], {radius:5, color:'orange'}).addTo(map).bindTooltip(s.Station_Name);
                     document.getElementById('fromStn').add(new Option(s.Station_Name, s.Station_Name));
+                    document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
                 }
             });
         }});
     };
 
-    function findMaster(type) {
+    function lookup(type) {
         const id = document.getElementById(type+'Id').value.toUpperCase();
-        if(type==='cli') {
-            const f = db.cli.find(x => x.CLI_ID === id);
-            document.getElementById('cliName').innerText = f ? f.CLI_NAME : "-";
-        } else {
-            const f = db.crew.find(x => x.CREW_ID === id);
-            document.getElementById(type+'Name').innerText = f ? f.CREW_NAME : "-";
-        }
+        const f = (type==='cli' ? db.cli : db.crew).find(x => (x.CLI_ID || x.CREW_ID) === id);
+        document.getElementById(type + (type==='cli'?'N':'N')).innerText = f ? (f.CLI_NAME || f.CREW_NAME) : "-";
     }
 
-    function startAudit() {
+    function start() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Select File!");
-
+        if(!file) return alert("Select File");
         Papa.parse(file, {
             header:true, dynamicTyping:true, skipEmptyLines:true,
             complete: r => {
-                mainData = r.data.filter(d => (d.Latitude || d.lat) && d.Speed != null);
-                if(mainData.length > 0) {
+                raw = r.data.filter(d => (d.Latitude || d.lat) && d.Speed != null);
+                if(raw.length > 0) {
                     document.getElementById('map-page').scrollIntoView();
-                    drawAll();
+                    render();
                 }
             }
         });
     }
 
-    function drawAll() {
-        // Map
-        const path = mainData.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
+    function render() {
+        const path = raw.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
         L.polyline(path, {color:'blue', weight:3}).addTo(map);
         map.fitBounds(path);
 
-        // Journey Chart
+        // HUD Interactive
+        map.on('mousemove', e => {
+            let p = raw[Math.floor(raw.length/2)];
+            document.getElementById('h-spd').innerText = p.Speed + " KMPH";
+            document.getElementById('h-stn').innerText = p['last/cur stationCode'] || "Section";
+        });
+
+        // Charts
         const jCtx = document.getElementById('jChart').getContext('2d');
         if(charts.j) charts.j.destroy();
         charts.j = new Chart(jCtx, {
             type: 'line',
-            data: {
-                labels: mainData.map((_, i) => i),
-                datasets: [{ label:'Speed', data: mainData.map(d => d.Speed), borderColor: 'blue', pointRadius:0 }]
-            },
+            data: { labels: raw.map((_,i)=>i), datasets: [{ label:'Speed', data: raw.map(d=>d.Speed), borderColor: 'blue', pointRadius:0 }] },
             options: { responsive:true, maintainAspectRatio:false }
         });
 
-        // Braking Chart (Infinite Loop Fixed)
         const bCtx = document.getElementById('bChart').getContext('2d');
         if(charts.b) charts.b.destroy();
-        let stopSlice = mainData.slice(-100); // Last 100 points only to prevent infinite
+        let bData = raw.slice(-200); // FIXED: Only last 200 points for braking
         charts.b = new Chart(bCtx, {
             type: 'line',
-            data: {
-                labels: stopSlice.map((_, i) => i),
-                datasets: [{ label:'Braking Pattern', data: stopSlice.map(d => d.Speed), borderColor: 'red' }]
-            },
+            data: { labels: bData.map((_,i)=>i), datasets: [{ label:'Braking', data: bData.map(d=>d.Speed), borderColor: 'red' }] },
             options: { responsive:true, maintainAspectRatio:false }
         });
     }
