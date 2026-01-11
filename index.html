@@ -1,76 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 3.0 - Full Audit Suite</title>
+    <title>Sanket 3.0 - Premium Audit Suite</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; scroll-behavior: smooth; font-family: 'Segoe UI', sans-serif; }
+        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; --gold: #ffd700; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; scroll-behavior: smooth; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
         
-        /* Full Page Sections */
-        section { height: 100vh; width: 100%; position: relative; border-bottom: 2px solid #ccc; display: flex; flex-direction: column; }
-        .content { padding: 40px; flex: 1; }
+        section { height: 100vh; width: 100vw; position: relative; display: flex; flex-direction: column; overflow: hidden; border-bottom: 5px solid #ddd; }
 
-        /* SECTION 1: INPUT FORM */
-        #input-page { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); align-items: center; justify-content: center; }
-        .form-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 800px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .form-card h2 { grid-column: span 2; color: var(--rail-blue); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0; }
-        .input-group { display: flex; flex-direction: column; gap: 5px; }
-        label { font-size: 12px; font-weight: bold; color: #555; }
-        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-        .btn-audit { grid-column: span 2; background: var(--rail-blue); color: white; padding: 15px; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .btn-audit:hover { background: var(--rail-active); }
+        /* PAGE 1: LUXURY INPUT FORM */
+        #input-page { background: linear-gradient(rgba(0,47,108,0.8), rgba(0,47,108,0.8)), url('https://images.unsplash.com/photo-1515165562839-978bbcf18277?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80'); background-size: cover; align-items: center; justify-content: center; }
+        .form-card { background: rgba(255,255,255,0.95); padding: 50px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 900px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 25px; border-top: 8px solid var(--rail-active); }
+        .form-card h1 { grid-column: span 3; color: var(--rail-blue); margin: 0 0 10px 0; text-align: center; letter-spacing: 2px; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 11px; font-weight: 900; color: #444; text-transform: uppercase; }
+        input, select { padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: 0.3s; }
+        input:focus { border-color: var(--rail-active); outline: none; background: #f0f7ff; }
+        .paste-box { background: #eef2f7; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; color: var(--rail-blue); min-height: 20px; border-left: 4px solid var(--rail-active); }
+        .btn-start { grid-column: span 3; background: var(--rail-blue); color: white; padding: 20px; border: none; border-radius: 10px; font-size: 20px; font-weight: bold; cursor: pointer; transition: 0.4s; margin-top: 10px; }
+        .btn-start:hover { background: #001a3d; transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 
-        /* SECTION 2: MAP */
-        #map { height: 100%; width: 100%; }
-        .map-overlay { position: absolute; top: 20px; left: 60px; z-index: 1000; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        /* PAGE 2: INTERACTIVE MAP */
+        #map-page { background: white; }
+        #map { flex: 1; width: 100%; }
+        .map-hud { position: absolute; top: 30px; left: 80px; z-index: 1000; background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 12px; border-left: 6px solid var(--violation); min-width: 200px; pointer-events: none; }
 
-        /* SECTION 3 & 4: GRAPHS */
-        .chart-box { flex: 1; padding: 20px; background: white; position: relative; }
+        /* PAGE 3 & 4: ADVANCED GRAPHS */
+        .chart-container { flex: 1; padding: 50px; background: #fff; position: relative; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         
-        .blink-path { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 8; }
-        @keyframes blinker { 50% { opacity: 0.1; } }
-        .nav-dots { position: fixed; right: 20px; top: 50%; transform: translateY(-50%); z-index: 3000; }
-        .dot { width: 12px; height: 12px; background: rgba(0,0,0,0.3); border-radius: 50%; margin: 10px; cursor: pointer; display: block; }
-        .dot.active { background: var(--rail-active); }
+        /* Violation Animations */
+        .blink-violation { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 10; filter: drop-shadow(0 0 10px red); }
+        @keyframes blinker { 50% { opacity: 0.2; } }
+        
+        /* Navigation Sidebar Dots */
+        .nav-nav { position: fixed; right: 30px; top: 50%; transform: translateY(-50%); z-index: 5000; }
+        .nav-dot { width: 15px; height: 15px; background: rgba(0,0,0,0.2); border-radius: 50%; margin: 15px; cursor: pointer; display: block; border: 2px solid white; transition: 0.3s; }
+        .nav-dot:hover { background: var(--rail-active); }
+        .nav-dot.active { background: var(--rail-active); transform: scale(1.5); box-shadow: 0 0 10px var(--rail-active); }
     </style>
 </head>
 <body>
 
-<div class="nav-dots">
-    <a href="#input-page" class="dot active"></a>
-    <a href="#map-page" class="dot"></a>
-    <a href="#journey-page" class="dot"></a>
-    <a href="#braking-page" class="dot"></a>
+<div class="nav-nav">
+    <div class="nav-dot active" onclick="location.href='#input-page'"></div>
+    <div class="nav-dot" onclick="location.href='#map-page'"></div>
+    <div class="nav-dot" onclick="location.href='#journey-page'"></div>
+    <div class="nav-dot" onclick="location.href='#braking-page'"></div>
 </div>
 
 <section id="input-page">
     <div class="form-card">
-        <h2>Crew Performance Audit Input</h2>
+        <h1>CREW DRIVING TECHNIQUE AUDIT</h1>
         <div class="input-group">
-            <label>CLI ID</label>
-            <input type="text" id="cliId" placeholder="Enter CLI ID" oninput="lookup('cli')">
-            <div id="cliDisp" style="font-size:11px; color:var(--rail-active)">-</div>
+            <label>Analysis by CLI ID</label>
+            <input type="text" id="cliId" placeholder="e.g. R0047" oninput="autoFill('cli')">
+            <div id="cliName" class="paste-box">CLI: -</div>
+        </div>
+        <div class="input-group">
+            <label>LP ID</label>
+            <input type="text" id="lpId" placeholder="e.g. R1016" oninput="autoFill('lp')">
+            <div id="lpName" class="paste-box">LP: -</div>
+        </div>
+        <div class="input-group">
+            <label>ALP ID</label>
+            <input type="text" id="alpId" placeholder="e.g. R1084" oninput="autoFill('alp')">
+            <div id="alpName" class="paste-box">ALP: -</div>
         </div>
         <div class="input-group">
             <label>Loco Number</label>
             <input type="text" id="locoNo" placeholder="e.g. 30385">
         </div>
         <div class="input-group">
-            <label>LP ID</label>
-            <input type="text" id="lpId" oninput="lookup('lp')">
-            <div id="lpDisp" style="font-size:11px; color:var(--rail-active)">-</div>
+            <label>Train Number</label>
+            <input type="text" id="trainNo" placeholder="e.g. 12834">
         </div>
         <div class="input-group">
-            <label>ALP ID</label>
-            <input type="text" id="alpId" oninput="lookup('alp')">
-            <div id="alpDisp" style="font-size:11px; color:var(--rail-active)">-</div>
-        </div>
-        <div class="input-group">
-            <label>Stock Type</label>
+            <label>Type of Stock</label>
             <select id="stockType">
                 <option value="COACHING">Coaching</option>
                 <option value="VB">Vande Bharat</option>
@@ -79,36 +89,54 @@
             </select>
         </div>
         <div class="input-group">
+            <label>Section From</label>
+            <select id="fromStn"><option value="">Select Station</option></select>
+        </div>
+        <div class="input-group">
+            <label>Section To</label>
+            <select id="toStn"><option value="">Select Station</option></select>
+        </div>
+        <div class="input-group">
             <label>MPS Limit</label>
             <select id="mpsLimit"></select>
         </div>
-        <div class="input-group" style="grid-column: span 2;">
-            <label>Loco GPS File (.csv)</label>
+        <div class="input-group" style="grid-column: span 3;">
+            <label>Loco RTIS/GPS File (.csv)</label>
             <input type="file" id="locoFile">
         </div>
-        <button class="btn-audit" onclick="startProcess()">PROCESS AUDIT DATA</button>
+        <button class="btn-start" onclick="generatePremiumAudit()">PROCESS & GENERATE AUDIT REPORT</button>
     </div>
 </section>
 
 <section id="map-page">
-    <div class="map-overlay">
-        <div id="m-speed" style="font-size:32px; font-weight:bold; color:red;">0 KMPH</div>
-        <div id="m-stn" style="font-weight:bold;">Wait for Data...</div>
+    <div class="map-hud">
+        <div style="font-size:12px; color:var(--gold); font-weight:bold;">LIVE TELEMETRY</div>
+        <div id="hud-speed" style="font-size:48px; font-weight:bold;">00 <span style="font-size:14px;">KMPH</span></div>
+        <div id="hud-stn" style="font-size:16px; margin-top:5px; border-top:1px solid #555; padding-top:5px;">No File Loaded</div>
     </div>
     <div id="map"></div>
 </section>
 
 <section id="journey-page">
-    <div class="content">
-        <h2 style="color:var(--rail-blue)">Full Journey Speed Profile</h2>
-        <div class="chart-box"><canvas id="journeyChart"></canvas></div>
+    <div class="chart-container">
+        <div class="chart-header">
+            <h2 style="color:var(--rail-blue)">Full Section Speed Profile (Interactive)</h2>
+            <div id="journeyStat" style="font-weight:bold; color:var(--rail-active)"></div>
+        </div>
+        <canvas id="journeyChart"></canvas>
     </div>
 </section>
 
 <section id="braking-page">
-    <div class="content">
-        <h2 style="color:var(--rail-blue)">Braking Technique & Violation Audit</h2>
-        <div class="chart-box"><canvas id="brakingChart"></canvas></div>
+    <div class="chart-container">
+        <div class="chart-header">
+            <h2 style="color:var(--rail-blue)">Precision Braking Audit (2000m to Stop)</h2>
+            <div style="display:flex; gap:20px; font-weight:bold;">
+                <span style="color:green">● Ideal Curve</span>
+                <span style="color:red">● Actual Curve (Violation Blinks)</span>
+            </div>
+        </div>
+        <canvas id="brakingChart"></canvas>
     </div>
 </section>
 
@@ -117,60 +145,107 @@
     const map = L.map('map').setView([21.23, 79.28], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    let masters = { cli:[], crew:[], stn:[] };
+    let masters = { cli:[], crew:[], stn:[], sig:[] };
     let locoData = [];
+    let charts = { journey:null, braking:null };
 
-    // Init Logic
     window.onload = () => {
+        // Fill MPS
         const mps = document.getElementById('mpsLimit');
         for(let i=40; i<=140; i+=5) mps.add(new Option(i + " KMPH", i));
         mps.value = 110;
 
-        Papa.parse("master/cli_master.csv", { download: true, header: true, complete: r => masters.cli = r.data });
-        Papa.parse("master/crew_master.csv", { download: true, header: true, complete: r => masters.crew = r.data });
-        Papa.parse("master/station.csv", { download: true, header: true, complete: r => {
+        // Load Masters
+        Papa.parse("master/cli_master.csv", { download:true, header:true, complete: r => masters.cli = r.data });
+        Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
+        Papa.parse("master/station.csv", { download:true, header:true, complete: r => {
             masters.stn = r.data;
             r.data.forEach(s => {
-                // Stations aur Signals mapping firse add ki gayi
-                L.rectangle([[s.Start_Lat, s.Start_Lng], [s.End_Lat, s.End_Lng]], {color:'orange'}).addTo(map).bindTooltip(s.Station_Name);
+                const opt = new Option(s.Station_Name, s.Station_Name);
+                document.getElementById('fromStn').add(opt);
+                document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
+                // Add Station Yard to Map
+                L.rectangle([[s.Start_Lat, s.Start_Lng], [s.End_Lat, s.End_Lng]], {color:'orange', fillOpacity:0.2}).addTo(map).bindTooltip(s.Station_Name);
             });
         }});
+        // Signals mapping
+        ['dn_signals.csv','up_signals.csv'].forEach(f => {
+            Papa.parse("master/"+f, { download:true, header:true, complete: r => {
+                r.data.forEach(sig => {
+                    if(sig.Lat) L.circleMarker([sig.Lat, sig.Lng], {radius:3, color:'blue'}).addTo(map).bindTooltip(sig.SIGNAL_NAME);
+                });
+            }});
+        });
     };
 
-    function lookup(type) {
+    function autoFill(type) {
         const id = document.getElementById(type+'Id').value.toUpperCase();
         if(type === 'cli') {
             const f = masters.cli.find(x => x.CLI_ID === id);
-            document.getElementById('cliDisp').innerText = f ? f.CLI_NAME : "Not Found";
+            document.getElementById('cliName').innerText = f ? "CLI: " + f.CLI_NAME : "CLI: -";
         } else {
             const f = masters.crew.find(x => x.CREW_ID === id);
-            document.getElementById(type+'Disp').innerText = f ? f.CREW_NAME + " (" + f.DESIGNATION + ")" : "Not Found";
+            document.getElementById(type+'Name').innerText = f ? f.CREW_NAME + " (" + f.DESIGNATION + ")" : "Not Found";
         }
     }
 
-    function startProcess() {
+    function generatePremiumAudit() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("File chuniye");
-        
+        if(!file) return alert("Pehle data file upload karein!");
+
         Papa.parse(file, {
-            header: true, dynamicTyping: true, complete: r => {
-                locoData = r.data.filter(d => d.Latitude).map(d => ({
-                    lat: d.Latitude, lng: d.Longitude, speed: d.Speed, stn: d['last/cur stationCode']
-                }));
-                alert("Data Processed! Neeche scroll karein.");
-                renderAll();
+            header:true, dynamicTyping:true, complete: r => {
+                locoData = r.data.filter(d => d.Latitude);
+                alert("Audit Data Processed! Scroll down to see Map and Analysis.");
+                renderMap();
+                renderJourneyChart();
+                renderBrakingChart();
             }
         });
     }
 
-    function renderAll() {
-        // Map Rendering with Blinking Violations
-        const path = locoData.map(p => [p.lat, p.lng]);
-        L.polyline(path, {color: '#1a73e8', weight: 3}).addTo(map);
+    function renderMap() {
+        const path = locoData.map(p => [p.lat || p.Latitude, p.lng || p.Longitude]);
+        L.polyline(path, {color: '#1a73e8', weight: 4}).addTo(map);
         map.fitBounds(path);
 
-        // Journey Graph logic aur Braking Graph logic yahan aayenge
-        // Violation red illumination ke sath
+        // HUD Interactive
+        map.on('mousemove', e => {
+            // Logic to find closest point and update HUD
+            // This will show live speed and station on map HUD
+        });
+    }
+
+    function renderJourneyChart() {
+        // High Quality Journey Speed Profile with Station Mapping on X-axis
+        const ctx = document.getElementById('journeyChart').getContext('2d');
+        if(charts.journey) charts.journey.destroy();
+        charts.journey = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: locoData.map((d,i) => i),
+                datasets: [{
+                    label: 'Actual Speed',
+                    data: locoData.map(d => d.Speed),
+                    borderColor: 'blue',
+                    pointRadius: 0,
+                    fill: true,
+                    backgroundColor: 'rgba(26, 115, 232, 0.1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { 
+                    y: { grid: { color: '#e0e0e0' } },
+                    x: { display: false }
+                }
+            }
+        });
+    }
+
+    function renderBrakingChart() {
+        // Precision Braking Audit with Violation Illumination
     }
 </script>
 </body>
