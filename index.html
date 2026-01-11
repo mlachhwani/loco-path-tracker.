@@ -1,90 +1,88 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 2.0 - Full Audit System</title>
+    <title>Sanket 2.0 - Professional Audit Pro</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail-blue: #1a73e8; --rail-red: #d93025; }
-        body { margin: 0; display: flex; font-family: 'Segoe UI', sans-serif; height: 100vh; background: #f4f7f6; }
-        #sidebar { width: 380px; background: white; border-right: 1px solid #ccc; padding: 20px; overflow-y: auto; z-index: 1001; }
-        #main { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
-        #map { flex-grow: 1; width: 100%; }
-        #analysis-panel { height: 350px; background: white; border-top: 4px solid var(--rail-blue); padding: 15px; overflow-y: auto; display: none; }
-        .form-group { margin-bottom: 12px; }
-        label { font-size: 11px; font-weight: bold; color: #555; text-transform: uppercase; }
-        input, select { width: 100%; padding: 8px; border: 1px solid #bdc3c7; border-radius: 4px; box-sizing: border-box; }
-        .display-box { background: #e8f0fe; padding: 6px; border-radius: 4px; font-size: 12px; color: #1a73e8; margin-top: 4px; font-weight: bold; border-left: 3px solid var(--rail-blue); }
-        .btn-audit { width: 100%; background: var(--rail-blue); color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-        th { background: #f1f3f4; padding: 10px; text-align: left; }
-        td { padding: 8px; border-bottom: 1px solid #eee; }
-        .violation-row { background: #fff1f0 !important; color: #d93025; font-weight: bold; }
-        .blink-red { animation: blinker 1s linear infinite; stroke: red; stroke-width: 6; }
+        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
+        body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Segoe UI', sans-serif; background: #f8f9fa; }
+        
+        /* Top Navigation Bar */
+        #top-bar { background: var(--rail-blue); color: white; padding: 10px 20px; display: grid; grid-template-columns: repeat(5, 1fr) auto; gap: 15px; align-items: end; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 2000; }
+        .input-box { display: flex; flex-direction: column; gap: 4px; }
+        .input-box label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
+        input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
+        .disp-text { font-size: 11px; color: #fff; font-weight: bold; margin-top: 2px; height: 14px; }
+        .btn-generate { background: #ff9800; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+
+        /* Map & Graph Layout */
+        #map { flex: 1; min-height: 45vh; width: 100%; border-bottom: 3px solid #ccc; }
+        #graph-container { height: 35vh; background: white; padding: 10px; position: relative; }
+        
+        /* Floating Speedo on Map */
+        #map-overlay { position: absolute; top: 80px; left: 20px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 8px; border-left: 5px solid var(--rail-active); z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.2); pointer-events: none; }
+        
+        .blink-violation { animation: blinker 0.8s linear infinite; stroke: red; stroke-width: 8; }
         @keyframes blinker { 50% { opacity: 0.1; } }
     </style>
 </head>
 <body>
 
-<div id="sidebar">
-    <h3 style="color:var(--rail-blue); margin-top:0;">Audit Dashboard</h3>
-    
-    <div class="form-group">
-        <label>CLI ID</label>
-        <input type="text" id="cliId" placeholder="Enter CLI ID" oninput="lookupCLI()">
-        <div id="cliDisp" class="display-box">Name: -</div>
+<div id="top-bar">
+    <div class="input-box">
+        <label>CLI Details</label>
+        <input type="text" id="cliId" placeholder="CLI ID" oninput="lookupCLI()">
+        <div id="cliName" class="disp-text">-</div>
     </div>
-
-    <div class="form-group">
-        <label>LP ID</label>
-        <input type="text" id="lpId" placeholder="Enter LP ID" oninput="lookupCrew('lp')">
-        <div id="lpDisp" class="display-box">LP Name: - | Desig: -</div>
-    </div>
-
-    <div class="form-group">
-        <label>ALP ID</label>
-        <input type="text" id="alpId" placeholder="Enter ALP ID" oninput="lookupCrew('alp')">
-        <div id="alpDisp" class="display-box">ALP Name: -</div>
-    </div>
-
-    <div class="form-group">
-        <label>Stock Type & MPS</label>
+    <div class="input-box">
+        <label>LP / ALP ID</label>
         <div style="display:flex; gap:5px;">
-            <select id="stockType">
-                <option value="COACHING">Coaching</option>
-                <option value="VB">Vande Bharat</option>
-                <option value="GOODS">Goods</option>
-                <option value="LE">Light Engine</option>
-            </select>
-            <select id="mpsLimit"></select>
+            <input type="text" id="lpId" placeholder="LP ID" oninput="lookupCrew('lp')">
+            <input type="text" id="alpId" placeholder="ALP ID" oninput="lookupCrew('alp')">
         </div>
+        <div id="crewName" class="disp-text">-</div>
     </div>
-
-    <div class="form-group">
+    <div class="input-box">
+        <label>Loco / Train / Stock</label>
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="locoNo" placeholder="Loco" style="width:50px;">
+            <select id="stockType" style="width:90px;">
+                <option value="COACHING">Coaching</option>
+                <option value="VB">VB</option>
+                <option value="GOODS">Goods</option>
+                <option value="LE">LE</option>
+            </select>
+            <select id="mpsLimit" id="mpsLimit"></select>
+        </div>
+        <div id="stockInfo" class="disp-text">Select Params</div>
+    </div>
+    <div class="input-box">
         <label>Section (From - To)</label>
         <div style="display:flex; gap:5px;">
             <select id="fromStn"><option value="">From</option></select>
             <select id="toStn"><option value="">To</option></select>
         </div>
     </div>
-
-    <div class="form-group">
-        <label>Loco GPS File (.csv)</label>
-        <input type="file" id="locoFile" accept=".csv">
+    <div class="input-box">
+        <label>Loco GPS File</label>
+        <input type="file" id="locoFile">
     </div>
-
-    <button class="btn-audit" onclick="generateAudit()">GENERATE REPORT & MAP</button>
+    <button class="btn-generate" onclick="startFullAudit()">GENERATE REPORT</button>
 </div>
 
-<div id="main">
-    <div id="map"></div>
-    <div id="analysis-panel">
-        <h4 style="margin:0 0 10px 0;">Braking Violation Audit</h4>
-        <div style="height:140px;"><canvas id="brakingChart"></canvas></div>
-        <div id="auditResults"></div>
-    </div>
+<div id="map-overlay">
+    <div style="font-size:10px; color:#666;">LIVE TRACKER</div>
+    <div id="live-speed" style="font-size:24px; font-weight:bold; color:var(--violation);">0 kmph</div>
+    <div id="live-stn" style="font-size:12px; font-weight:bold;">No Data Loaded</div>
+</div>
+
+<div id="map"></div>
+
+<div id="graph-container">
+    <canvas id="mainChart"></canvas>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -93,23 +91,13 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     let masters = { cli:[], crew:[], stn:[] };
-    let chartObj = null;
-    let blinkLayers = [];
+    let fullLocoData = [];
+    let chartInstance = null;
 
-    // Coordinate Conversion (DDMM.MMMM to Decimal)
-    function conv(v) {
-        if(!v) return 0;
-        let s = v.toString().trim();
-        let dot = s.indexOf('.');
-        if (dot < 2) return parseFloat(s);
-        return parseFloat(s.substring(0, dot-2)) + (parseFloat(s.substring(dot-2))/60);
-    }
-
-    // Load All Masters
+    // Load Masters & Setup UI
     window.onload = () => {
-        // MPS Fill
         const mps = document.getElementById('mpsLimit');
-        for(let i=40; i<=140; i+=5) mps.add(new Option(i+" KMPH", i));
+        for(let i=40; i<=140; i+=5) mps.add(new Option(i+"K", i));
         mps.value = 110;
 
         Papa.parse("master/cli_master.csv", { download: true, header: true, complete: r => masters.cli = r.data });
@@ -117,86 +105,94 @@
         Papa.parse("master/station.csv", { download: true, header: true, complete: r => {
             masters.stn = r.data;
             r.data.forEach(s => {
-                const opt = new Option(s.Station_Name, s.Station_Name);
-                document.getElementById('fromStn').add(opt);
+                document.getElementById('fromStn').add(new Option(s.Station_Name, s.Station_Name));
                 document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
-                L.rectangle([[conv(s['Start_Lat ']), conv(s.Start_Lng)], [conv(s['End_Lat ']), conv(s.End_Lng)]], {color: 'orange', weight: 1}).addTo(map).bindTooltip(s.Station_Name);
             });
         }});
-        // Load Signals
-        ['dn_signals.csv', 'up_signals.csv'].forEach(file => {
-            Papa.parse("master/"+file, { download: true, header: true, complete: r => {
-                r.data.forEach(sig => {
-                    if(sig.Lat) L.circleMarker([conv(sig.Lat), conv(sig.Lng)], {radius: 3, color: 'blue'}).addTo(map).bindTooltip(sig.SIGNAL_NAME);
-                });
-            }});
-        });
     };
 
     function lookupCLI() {
-        const found = masters.cli.find(x => x.CLI_ID === document.getElementById('cliId').value.toUpperCase());
-        document.getElementById('cliDisp').innerText = found ? "Name: " + found.CLI_NAME : "Name: -";
+        const f = masters.cli.find(x => x.CLI_ID === document.getElementById('cliId').value.toUpperCase());
+        document.getElementById('cliName').innerText = f ? f.CLI_NAME : "-";
     }
 
     function lookupCrew(type) {
-        const found = masters.crew.find(x => x.CREW_ID === document.getElementById(type+'Id').value.toUpperCase());
-        const disp = document.getElementById(type+'Disp');
-        disp.innerText = found ? (type==='lp'?"LP: ":"ALP: ") + found.CREW_NAME + " | " + found.DESIGNATION : "Not Found";
+        const f = masters.crew.find(x => x.CREW_ID === document.getElementById(type+'Id').value.toUpperCase());
+        if(f) document.getElementById('crewName').innerText = f.CREW_NAME + " (" + f.DESIGNATION + ")";
     }
 
-    // Haversine Distance
-    function getDist(p1, p2) {
-        const R = 6371e3;
-        const dLat = (p2.lat - p1.lat) * Math.PI/180;
-        const dLon = (p2.lng - p1.lng) * Math.PI/180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
-
-    function generateAudit() {
+    function startFullAudit() {
         const file = document.getElementById('locoFile').files[0];
-        if(!file) return alert("Upload CSV first");
-
+        if(!file) return alert("Upload CSV!");
+        
         Papa.parse(file, {
             header: true, dynamicTyping: true, complete: r => {
-                const data = r.data.filter(d => d.Latitude).map(d => ({lat: d.Latitude, lng: d.Longitude, speed: d.Speed, stn: d['last/cur stationCode']}));
-                processRealData(data);
-                document.getElementById('analysis-panel').style.display = 'block';
+                fullLocoData = r.data.filter(d => d.Latitude).map(d => ({
+                    lat: d.Latitude, lng: d.Longitude, speed: d.Speed, stn: d['last/cur stationCode'] || 'Section'
+                }));
+                drawAuditUI();
             }
         });
     }
 
-    function processRealData(points) {
-        blinkLayers.forEach(l => map.removeLayer(l));
-        let html = `<table><tr><th>Stoppage</th><th>@2000m</th><th>@1000m</th><th>Status</th></tr>`;
-        const stock = document.getElementById('stockType').value;
-        const limits = { 'VB':[110,90], 'COACHING':[100,60], 'GOODS':[55,40], 'LE':[90,60] }[stock];
+    function drawAuditUI() {
+        // 1. Draw Map Path
+        const pathCoords = fullLocoData.map(p => [p.lat, p.lng]);
+        L.polyline(pathCoords, {color: '#1a73e8', weight: 4}).addTo(map);
+        map.fitBounds(pathCoords);
 
-        for(let i=10; i<points.length; i++) {
-            if(points[i].speed === 0 && points[i-1].speed > 0) {
-                let d = 0, s1000 = null, s2000 = null, path = [];
-                for(let j=i; j>0; j--) {
-                    let dist = getDist(points[j], points[j-1]);
-                    d += dist; path.push([points[j].lat, points[j].lng]);
-                    if(!s1000 && d >= 1000) s1000 = points[j].speed;
-                    if(!s2000 && d >= 2000) { s2000 = points[j].speed; break; }
+        // 2. Interactive Pointer on Map
+        let pointer = L.circleMarker([0,0], {radius: 7, color: 'white', fillColor: 'red', fillOpacity: 1}).addTo(map);
+        map.on('mousemove', e => {
+            let close = fullLocoData.reduce((prev, curr) => 
+                map.distance(e.latlng, [curr.lat, curr.lng]) < map.distance(e.latlng, [prev.lat, prev.lng]) ? curr : prev);
+            pointer.setLatLng([close.lat, close.lng]);
+            document.getElementById('live-speed').innerText = close.speed + " kmph";
+            document.getElementById('live-stn').innerText = close.stn;
+        });
+
+        // 3. Generate Single Continuous Graph
+        renderProfessionalGraph();
+    }
+
+    function renderProfessionalGraph() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if(chartInstance) chartInstance.destroy();
+
+        const speeds = fullLocoData.map(p => p.speed);
+        const labels = fullLocoData.map((p, i) => i); // Sequential points
+
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Actual Speed',
+                    data: speeds,
+                    borderColor: '#1a73e8',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    segment: {
+                        borderColor: ctx => ctx.p1.raw > 110 ? 'red' : undefined // Basic overspeed highlight
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: '#e0e0e0' },
+                        title: { display: true, text: 'Speed (kmph)' }
+                    },
+                    x: { display: false }
+                },
+                plugins: {
+                    tooltip: { mode: 'index', intersect: false }
                 }
-
-                const isV = (s1000 > limits[1] || s2000 > limits[0]);
-                if(isV) {
-                    let bl = L.polyline(path, {className: 'blink-red'}).addTo(map);
-                    blinkLayers.push(bl);
-                }
-
-                html += `<tr class="${isV?'violation-row':''}">
-                    <td>${points[i].stn || 'Section Stop'}</td>
-                    <td>${s2000||'-'}</td><td>${s1000||'-'}</td>
-                    <td>${isV?'⚠️ VIOLATION':'✅ OK'}</td>
-                </tr>`;
             }
-        }
-        document.getElementById('auditResults').innerHTML = html + "</table>";
-        map.setView([points[0].lat, points[0].lng], 12);
+        });
     }
 </script>
 </body>
