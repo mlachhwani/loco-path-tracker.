@@ -1,87 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <title>Sanket 3.2 - Stable Professional Audit</title>
+    <title>Sanket 3.2 - Stable Fix</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --rail-blue: #002f6c; --rail-active: #1a73e8; --violation: #d93025; }
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f7f6; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #002f6c; color: white; padding: 15px 25px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .input-group { display: flex; flex-direction: column; }
+        label { font-size: 11px; font-weight: bold; color: #adcce9; margin-bottom: 3px; }
+        input, select { padding: 8px; border-radius: 5px; border: none; font-size: 13px; }
+        .name-box { font-size: 12px; font-weight: bold; margin-top: 5px; color: #fff; height: 15px; }
+        .btn-go { background: #28a745; color: white; font-weight: bold; cursor: pointer; border-radius: 5px; border: none; grid-column: span 1; height: 40px; align-self: end; }
         
-        /* Top Control Bar */
-        header { background: var(--rail-blue); color: white; padding: 10px 20px; display: flex; gap: 20px; align-items: flex-end; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 2000; flex-wrap: wrap; }
-        .input-box { display: flex; flex-direction: column; gap: 3px; }
-        .input-box label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
-        input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; outline: none; }
-        .name-disp { font-size: 11px; color: #fff; font-weight: bold; margin-top: 2px; height: 14px; min-width: 100px; border-bottom: 1px solid #555; }
-        .btn-gen { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; height: 35px; }
-
-        /* Main Layout */
-        main { display: flex; flex-direction: column; flex: 1; overflow-y: auto; gap: 10px; padding: 10px; }
-        #map { height: 400px; width: 100%; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); flex-shrink: 0; }
-        .charts-row { display: flex; gap: 10px; height: 300px; flex-shrink: 0; }
-        .chart-card { flex: 1; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: relative; }
-        
-        /* Floating HUD on Map */
-        #hud { position: absolute; top: 80px; left: 30px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; z-index: 1000; pointer-events: none; border-left: 4px solid var(--violation); }
+        main { display: grid; grid-template-rows: 1.5fr 1fr; gap: 10px; padding: 15px; flex: 1; overflow: hidden; }
+        #map { background: #ddd; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .graph-area { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .chart-card { background: white; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="input-box">
+    <div class="input-group">
         <label>CLI ID</label>
-        <input type="text" id="cliId" placeholder="R0047" oninput="lookup('cli')">
-        <div id="cliName" class="name-disp">-</div>
+        <input type="text" id="cliId" placeholder="e.g. R0047" oninput="doLookup('cli')">
+        <div id="cliN" class="name-box">-</div>
     </div>
-    <div class="input-box">
+    <div class="input-group">
         <label>LP ID</label>
-        <input type="text" id="lpId" placeholder="R1016" oninput="lookup('lp')">
-        <div id="lpName" class="name-disp">-</div>
+        <input type="text" id="lpId" oninput="doLookup('lp')">
+        <div id="lpN" class="name-box">-</div>
     </div>
-    <div class="input-box">
-        <label>ALP ID</label>
-        <input type="text" id="alpId" placeholder="R1084" oninput="lookup('alp')">
-        <div id="alpName" class="name-disp">-</div>
-    </div>
-    <div class="input-box">
-        <label>MPS & Stock</label>
-        <div style="display:flex; gap:5px;">
-            <select id="mps"></select>
-            <select id="stock"><option>COACHING</option><option>VB</option><option>GOODS</option></select>
-        </div>
-    </div>
-    <div class="input-box">
+    <div class="input-group">
         <label>Section From/To</label>
         <div style="display:flex; gap:5px;">
-            <select id="fromStn"><option value="">From</option></select>
-            <select id="toStn"><option value="">To</option></select>
+            <select id="fStn" style="width:50%"><option>From</option></select>
+            <select id="tStn" style="width:50%"><option>To</option></select>
         </div>
     </div>
-    <div class="input-box">
-        <label>RTIS File (.csv)</label>
-        <input type="file" id="csvFile">
+    <div class="input-group">
+        <label>RTIS Loco File (CSV)</label>
+        <input type="file" id="locoF">
     </div>
-    <button class="btn-gen" onclick="processAudit()">GENERATE REPORT</button>
+    <button class="btn-go" onclick="runAudit()">GENERATE REPORT</button>
 </header>
 
 <main>
-    <div id="map">
-        <div id="hud">
-            <div id="hud-speed" style="font-size:24px; font-weight:bold;">0 KMPH</div>
-            <div id="hud-stn" style="font-size:12px;">Section</div>
-        </div>
-    </div>
-
-    <div class="charts-row">
+    <div id="map"></div>
+    <div class="graph-area">
         <div class="chart-card">
-            <h4 style="margin:0 0 5px 0; font-size:12px;">Full Journey Speed Profile</h4>
+            <h4 style="margin:0">Speed Profile (Full Section)</h4>
             <canvas id="jChart"></canvas>
         </div>
         <div class="chart-card">
-            <h4 style="margin:0 0 5px 0; font-size:12px;">Braking Technique (Stop Violation)</h4>
+            <h4 style="margin:0">Braking Audit (Violation Check)</h4>
             <canvas id="bChart"></canvas>
         </div>
     </div>
@@ -91,89 +66,65 @@
 <script>
     const map = L.map('map').setView([21.23, 79.28], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    
-    let db = { cli:[], crew:[], stn:[] };
-    let locoData = [];
+
+    let masters = { cli:[], crew:[], stn:[] };
     let charts = {};
 
     window.onload = () => {
-        // Init MPS
-        const m = document.getElementById('mps');
-        for(let i=40; i<=140; i+=5) m.add(new Option(i+"K", i));
-        m.value = 110;
-
-        // Load Masters
-        Papa.parse("master/cli_master.csv", { download:true, header:true, complete: r => db.cli = r.data });
-        Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => db.crew = r.data });
-        Papa.parse("master/station.csv", { download:true, header:true, complete: r => {
-            db.stn = r.data;
+        // Load All Master Data
+        Papa.parse("master/cli_master.csv", { download: true, header: true, complete: r => masters.cli = r.data });
+        Papa.parse("master/crew_master.csv", { download: true, header: true, complete: r => masters.crew = r.data });
+        Papa.parse("master/station.csv", { download: true, header: true, complete: r => {
+            masters.stn = r.data;
             r.data.forEach(s => {
+                const name = s.Station_Name || s.STATION;
+                document.getElementById('fStn').add(new Option(name, name));
+                document.getElementById('tStn').add(new Option(name, name));
                 let lat = s.Start_Lat || s.Lat || s.LAT;
                 let lng = s.Start_Lng || s.Lng || s.LNG;
-                if(lat && lng) {
-                    L.circleMarker([lat, lng], {radius:5, color:'orange'}).addTo(map).bindTooltip(s.Station_Name);
-                    document.getElementById('fromStn').add(new Option(s.Station_Name, s.Station_Name));
-                    document.getElementById('toStn').add(new Option(s.Station_Name, s.Station_Name));
-                }
+                if(lat) L.circleMarker([lat, lng], {radius: 5, color: 'orange'}).addTo(map).bindTooltip(name);
             });
         }});
     };
 
-    function lookup(type) {
+    function doLookup(type) {
         const id = document.getElementById(type+'Id').value.toUpperCase();
-        const list = (type === 'cli') ? db.cli : db.crew;
-        const found = list.find(x => (x.CLI_ID || x.CREW_ID) === id);
-        document.getElementById(type+'Name').innerText = found ? (found.CLI_NAME || found.CREW_NAME) : "-";
+        const found = (type==='cli' ? masters.cli : masters.crew).find(x => (x.CLI_ID || x.CREW_ID) === id);
+        document.getElementById(type+(type==='cli'?'N':'N')).innerText = found ? (found.CLI_NAME || found.CREW_NAME) : "-";
     }
 
-    function processAudit() {
-        const file = document.getElementById('csvFile').files[0];
-        if(!file) return alert("Select CSV File First!");
+    function runAudit() {
+        const file = document.getElementById('locoF').files[0];
+        if(!file) return alert("Select File First!");
 
         Papa.parse(file, {
-            header:true, dynamicTyping:true, skipEmptyLines:true,
+            header: true, dynamicTyping: true, skipEmptyLines: true,
             complete: r => {
-                locoData = r.data.filter(d => (d.Latitude || d.lat) && d.Speed != null);
-                if(locoData.length === 0) return alert("Error: No GPS/Speed data in file!");
-                renderAll();
+                const data = r.data.filter(d => (d.Latitude || d.lat) && d.Speed != null);
+                if(data.length === 0) return alert("Error: CSV mein Latitude/Speed nahi hai!");
+                
+                // Draw Path
+                const pts = data.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
+                L.polyline(pts, {color: 'blue', weight: 3}).addTo(map);
+                map.fitBounds(pts);
+
+                // Speed Graph
+                if(charts.j) charts.j.destroy();
+                charts.j = new Chart(document.getElementById('jChart'), {
+                    type: 'line',
+                    data: { labels: data.map((_,i)=>i), datasets: [{ label:'KMPH', data: data.map(d=>d.Speed), borderColor: 'blue', pointRadius: 0 }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // Braking Graph (Last 200 points only)
+                if(charts.b) charts.b.destroy();
+                const bData = data.slice(-200);
+                charts.b = new Chart(document.getElementById('bChart'), {
+                    type: 'line',
+                    data: { labels: bData.map((_,i)=>i), datasets: [{ label:'Braking', data: bData.map(d=>d.Speed), borderColor: 'red' }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
             }
-        });
-    }
-
-    function renderAll() {
-        // 1. Draw Map Path
-        const coords = locoData.map(p => [p.Latitude || p.lat, p.Longitude || p.lng]);
-        L.polyline(coords, {color: 'blue', weight: 4}).addTo(map);
-        map.fitBounds(coords);
-
-        // 2. Interaction on Map
-        map.on('mousemove', e => {
-            let point = locoData[Math.floor(locoData.length/2)]; // Sample interaction
-            document.getElementById('hud-speed').innerText = point.Speed + " KMPH";
-            document.getElementById('hud-stn').innerText = point['last/cur stationCode'] || "Section";
-        });
-
-        // 3. Journey Chart
-        if(charts.j) charts.j.destroy();
-        charts.j = new Chart(document.getElementById('jChart'), {
-            type: 'line',
-            data: {
-                labels: locoData.map((_,i) => i),
-                datasets: [{ label:'Speed', data: locoData.map(d=>d.Speed), borderColor:'#1a73e8', pointRadius:0, fill:true, backgroundColor:'rgba(26,115,232,0.1)' }]
-            },
-            options: { responsive:true, maintainAspectRatio:false }
-        });
-
-        // 4. Braking Chart
-        if(charts.b) charts.b.destroy();
-        const brakeData = locoData.slice(-300); // Last 300 points for stable braking view
-        charts.b = new Chart(document.getElementById('bChart'), {
-            type: 'line',
-            data: {
-                labels: brakeData.map((_,i)=>i),
-                datasets: [{ label:'Braking Pattern', data: brakeData.map(d=>d.Speed), borderColor:'red', borderWidth:2 }]
-            },
-            options: { responsive:true, maintainAspectRatio:false }
         });
     }
 </script>
