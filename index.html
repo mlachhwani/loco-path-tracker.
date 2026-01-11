@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sanket 5.0 - Master Integrated Audit</title>
+    <title>Sanket 6.0 - Final Master Audit</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -9,15 +9,17 @@
         body { font-family: sans-serif; margin: 0; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #002f6c; color: white; padding: 10px 20px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; }
         .box { display: flex; flex-direction: column; gap: 2px; }
-        label { font-size: 10px; font-weight: bold; color: #adcce9; }
+        label { font-size: 10px; font-weight: bold; color: #adcce9; text-transform: uppercase; }
         input, select { padding: 6px; border-radius: 4px; border: none; font-size: 12px; }
-        .name-tag { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 14px; }
+        .name-tag { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 14px; margin-top: 2px; }
+        .btn { background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; height: 32px; }
         
         main { display: grid; grid-template-rows: 1.2fr 1fr; gap: 10px; padding: 10px; flex: 1; overflow: hidden; }
         #map { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .card { background: white; padding: 10px; border-radius: 8px; position: relative; }
+        .card { background: white; padding: 10px; border-radius: 8px; position: relative; display: flex; flex-direction: column; }
         h4 { margin: 0 0 5px 0; font-size: 12px; color: #002f6c; border-bottom: 1px solid #eee; }
+        canvas { flex: 1 !important; }
     </style>
 </head>
 <body>
@@ -27,14 +29,14 @@
     <div class="box"><label>LP ID</label><input type="text" id="lpId" oninput="look('lp')"><div id="lpN" class="name-tag">-</div></div>
     <div class="box"><label>Section</label><div style="display:flex;gap:2px;"><select id="fStn" style="width:50%"></select><select id="tStn" style="width:50%"></select></div></div>
     <div class="box"><label>RTIS Loco CSV</label><input type="file" id="locoFile"></div>
-    <button style="background:#28a745;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;height:30px;" onclick="runAudit()">GENERATE REPORT</button>
+    <button class="btn" onclick="runAudit()">GENERATE REPORT</button>
 </header>
 
 <main>
     <div id="map"></div>
     <div class="charts">
-        <div class="card"><h4>Journey Profile</h4><canvas id="chartJ"></canvas></div>
-        <div class="card"><h4>Braking Technique (Final Approach)</h4><canvas id="chartB"></canvas></div>
+        <div class="card"><h4>Journey Profile (Full Section)</h4><canvas id="chartJ"></canvas></div>
+        <div class="card"><h4>Braking Audit (Last Stop Curve)</h4><canvas id="chartB"></canvas></div>
     </div>
 </main>
 
@@ -46,15 +48,6 @@
     let masters = { crew:[], stn:[] };
     let activeCharts = {};
 
-    // Helper: Convert DDMM.MMMM to Decimal Degrees
-    function toDD(val) {
-        if (!val) return null;
-        let s = val.toString();
-        let deg = parseFloat(s.substring(0, s.indexOf('.') - 2));
-        let min = parseFloat(s.substring(s.indexOf('.') - 2));
-        return deg + (min / 60);
-    }
-
     // Load All 5 Master Files Automatically
     window.onload = () => {
         Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
@@ -63,14 +56,17 @@
         signalFiles.forEach(file => {
             Papa.parse(file, { download:true, header:true, complete: r => {
                 r.data.forEach(s => {
-                    let lat = toDD(s.Lat || s.LAT || s.Latitude);
-                    let lng = toDD(s.Lng || s.LNG || s.Longitude);
+                    let lat = parseFloat(s.Lat || s.LAT || s.Latitude);
+                    let lng = parseFloat(s.Lng || s.LNG || s.Longitude);
                     if(lat && lng) {
                         let color = file.includes('station') ? 'orange' : 'blue';
-                        L.circleMarker([lat, lng], {radius:4, color: color}).addTo(map).bindTooltip(s.Station_Name || s.Signal_Name || "Point");
+                        L.circleMarker([lat, lng], {radius:4, color: color, fillOpacity: 0.8}).addTo(map)
+                         .bindTooltip(s.Station_Name || s.Signal_Name || "Point");
+                        
                         if(file.includes('station')) {
-                            document.getElementById('fStn').add(new Option(s.Station_Name, s.Station_Name));
-                            document.getElementById('tStn').add(new Option(s.Station_Name, s.Station_Name));
+                            const name = s.Station_Name || s.STATION;
+                            document.getElementById('fStn').add(new Option(name, name));
+                            document.getElementById('tStn').add(new Option(name, name));
                         }
                     }
                 });
@@ -86,21 +82,26 @@
 
     function runAudit() {
         let file = document.getElementById('locoFile').files[0];
-        if(!file) return;
-        Papa.parse(file, { header:true, dynamicTyping:true, complete: r => {
+        if(!file) return alert("Select RTIS File First");
+        Papa.parse(file, { header:true, dynamicTyping:true, skipEmptyLines:true, complete: r => {
             let data = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
-            
-            // Draw Path
+            if(data.length === 0) return alert("No valid GPS/Speed data found");
+
+            // Map Plotting
             let path = data.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
             L.polyline(path, {color:'red', weight:3}).addTo(map);
             map.fitBounds(path);
 
-            // Chart 1: Full Speed
-            draw('chartJ', data.map(x=>x.Speed), 'Blue', 'KMPH');
+            // Journey Chart
+            draw('chartJ', data.map(x=>x.Speed), '#1a73e8', 'Full Journey');
 
-            // Chart 2: BRAKING FIX (Takes last 300 points to show the curve, not just 0)
-            let bPoints = data.slice(-300);
-            draw('chartB', bPoints.map(x=>x.Speed), 'Red', 'Braking Curve');
+            // BRAKING FIX: Find the last point where speed was > 5 KMPH and slice 200 points before it
+            let lastMovingIdx = data.length - 1;
+            for(let i = data.length - 1; i >= 0; i--) {
+                if(data[i].Speed > 5) { lastMovingIdx = i; break; }
+            }
+            let bData = data.slice(Math.max(0, lastMovingIdx - 250), lastMovingIdx + 20);
+            draw('chartB', bData.map(x=>x.Speed), '#d93025', 'Braking Curve');
         }});
     }
 
@@ -108,8 +109,16 @@
         if(activeCharts[id]) activeCharts[id].destroy();
         activeCharts[id] = new Chart(document.getElementById(id), {
             type: 'line',
-            data: { labels: vals.map((_,i)=>i), datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0}] },
-            options: { responsive:true, maintainAspectRatio:false, scales:{x:{display:false}} }
+            data: { 
+                labels: vals.map((_,i)=>i), 
+                datasets:[{label:lbl, data:vals, borderColor:clr, pointRadius:0, borderWidth: 2, fill: false}] 
+            },
+            options: { 
+                responsive:true, 
+                maintainAspectRatio:false, 
+                scales:{ x:{display:false}, y:{beginAtZero:true} },
+                plugins: { legend: { display: false } }
+            }
         });
     }
 </script>
