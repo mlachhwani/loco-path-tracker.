@@ -1,8 +1,3 @@
-/**
- * STAGE-02: MAPPING & LIVE TRACKING
- * Handle: Signal mapping, LC/NS Icons, and Live Speed Hover
- */
-
 let master = { stns: [], sigs: [] }, rtis = [];
 const map = L.map('map').setView([21.15, 79.12], 11);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -13,13 +8,12 @@ function conv(v) {
     return isNaN(n) ? null : Math.floor(n/100) + ((n%100)/60);
 }
 
-// Coordinate Repair Logic for Headers
 function getVal(row, keys) {
     let foundKey = Object.keys(row).find(k => keys.some(key => k.trim().toLowerCase() === key.toLowerCase()));
     return foundKey ? row[foundKey] : null;
 }
 
-// Load Master Data (Background)
+// Initial Load
 window.onload = function() {
     const t = Date.now();
     Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
@@ -29,15 +23,15 @@ window.onload = function() {
     }});
     ['up_signals.csv', 'dn_signals.csv', 'up_mid_signals.csv', 'dn_mid_signals.csv'].forEach(f => {
         let type = f.includes('up') ? 'UP' : 'DN';
+        if(f.includes('mid')) type += '_MID';
         Papa.parse("master/"+f+"?v="+t, {download:true, header:true, complete: r => {
             r.data.forEach(s => { s.clr = (f.includes('dn')?'blue':'green'); s.type = type; master.sigs.push(s); });
         }});
     });
 };
 
-// HIGH ACCURACY INTERPOLATION
 function getAccurateSpd(sLt, sLg) {
-    let radius = 0.002; // 200m
+    let radius = 0.002; 
     let points = rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < radius);
     if(points.length > 0) {
         points.sort((a,b) => Math.sqrt(Math.pow(a.lt-sLt,2)+Math.pow(a.lg-sLg,2)) - Math.sqrt(Math.pow(b.lt-sLt,2)+Math.pow(b.lg-sLg,2)));
@@ -57,7 +51,7 @@ function generateLiveMap() {
             if(!isNaN(lt)) { rtis.push({lt, lg, spd: parseFloat(getVal(row,['Speed','Spd']))}); pathArr.push([lt, lg]); }
         });
 
-        const journeyLine = L.polyline(pathArr, {color: '#222', weight: 5, opacity: 0.6}).addTo(map);
+        L.polyline(pathArr, {color: '#222', weight: 4, opacity: 0.7}).addTo(map);
         map.fitBounds(pathArr);
 
         // LIVE HOVER TRACKING
@@ -70,21 +64,27 @@ function generateLiveMap() {
             document.getElementById('live-speed').innerText = speed;
         });
 
-        // Unique LC Mapping & NS Separate Mapping
         let plottedLCs = new Set();
+        let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+        let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+        let activeDir = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng']))) ? "DN" : "UP";
+
         master.sigs.forEach(sig => {
             let name = getVal(sig,['SIGNAL_NAME','SIGNAL_N']);
             let sLt = conv(getVal(sig,['Lat'])), sLg = conv(getVal(sig,['Lng']));
-            if(!sLt) return;
+            if(!sLt || !sig.type.includes(activeDir)) return;
 
             if(name.includes("L XING") || name.includes("LC")) {
                 let lcNum = name.match(/\d+/);
-                if(lcNum && plottedLCs.has(lcNum[0])) return;
+                if(lcNum && plottedLCs.has(lcNum[0])) return; // UNIQUE LC LOGIC
                 if(lcNum) plottedLCs.add(lcNum[0]);
-                L.marker([sLt, sLg], {icon: L.divIcon({className:'lc-tag', html:'LC', iconSize:[20,20]})}).addTo(map).bindTooltip(name);
+                L.circleMarker([sLt, sLg], {radius: 8, color: 'orange', fillOpacity: 0.8}).addTo(map).bindTooltip("LC: " + name);
             } else {
                 let spd = getAccurateSpd(sLt, sLg);
                 L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr}).addTo(map).bindTooltip(name + " | Spd: " + spd);
+                if(spd !== "N/A") {
+                    L.marker([sLt-0.0004, sLg], {icon: L.divIcon({className:'speed-tag', html:Math.round(spd), iconSize:[26,14]})}).addTo(map);
+                }
             }
         });
     }});
