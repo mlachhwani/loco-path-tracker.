@@ -1,88 +1,133 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Mukesh Favorite - Final Audit</title>
+    <title>SECR Master Audit - M. Lachhwani</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #f4f7f9; display: flex; flex-direction: column; height: 100vh; }
-        header { background: #002f6c; color: white; padding: 12px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; }
-        .box { display: flex; flex-direction: column; gap: 4px; }
-        label { font-size: 10px; font-weight: bold; color: #adcce9; }
-        input, select { padding: 8px; border-radius: 4px; border: none; font-size: 12px; }
-        .res-name { font-size: 11px; color: #ffd700; font-weight: bold; min-height: 15px; }
-        main { display: flex; flex-direction: column; flex: 1; padding: 10px; gap: 10px; overflow: hidden; }
-        #map { flex: 1.5; background: white; border-radius: 8px; border: 1px solid #ccc; }
-        .charts { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h4 { margin: 0 0 5px 0; font-size: 12px; color: #002f6c; }
+        body { margin: 0; font-family: 'Segoe UI', Arial; background: #f4f7f9; }
+        .header { background: #002f6c; color: white; padding: 15px; text-align: center; font-size: 22px; font-weight: bold; border-bottom: 4px solid #d93025; }
+        #control-panel { max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #map { height: 750px; width: 98%; margin: 10px auto; border-radius: 8px; display: none; border: 2px solid #002f6c; }
+        .row { display: flex; gap: 15px; margin-bottom: 15px; }
+        .input-group { flex: 1; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-weight: bold; }
+        .btn-run { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 6px; }
+        .btn-run:hover { background: #218838; }
     </style>
 </head>
 <body>
-<header>
-    <div class="box"><label>CREW ID 1 (LP/ALP/CLI)</label><input type="text" id="id1" oninput="look('1')"><div id="n1" class="res-name">-</div></div>
-    <div class="box"><label>CREW ID 2 (LP/ALP/CLI)</label><input type="text" id="id2" oninput="look('2')"><div id="n2" class="res-name">-</div></div>
-    <div class="box"><label>SECTION</label><div style="display:flex;gap:2px;"><select id="fStn" style="width:50%"></select><select id="tStn" style="width:50%"></select></div></div>
-    <div class="box"><label>RTIS CSV</label><input type="file" id="rtis"></div>
-    <button style="background:#28a745;color:white;border:none;border-radius:4px;font-weight:bold;cursor:pointer;height:34px;" onclick="audit()">GENERATE REPORT</button>
-</header>
-<main>
-    <div id="map"></div>
-    <div class="charts">
-        <div class="card"><h4>Journey Speed</h4><canvas id="cJ"></canvas></div>
-        <div class="card"><h4>Braking Audit</h4><canvas id="cB"></canvas></div>
+
+<div class="header">SOUTH EAST CENTRAL RAILWAY - SAFETY AUDIT</div>
+
+<div id="control-panel">
+    <div class="row">
+        <div class="input-group"><label>Train No:</label><input type="text" id="t_no"></div>
+        <div class="input-group"><label>Date:</label><input type="date" id="j_date"></div>
     </div>
-</main>
+    <div class="row">
+        <div class="input-group"><label>From Station:</label><select id="s_from"></select></div>
+        <div class="input-group"><label>To Station:</label><select id="s_to"></select></div>
+    </div>
+    <div class="row">
+        <div class="input-group">
+            <label>Crew ID (Master List Search):</label>
+            <input type="text" id="crew_id" placeholder="Enter Crew ID" oninput="searchCrew()">
+            <div id="crew_display" style="margin-top:5px; color:#d93025; font-weight:bold;">Name: -</div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="input-group"><label>Upload RTIS CSV File:</label><input type="file" id="rtis_file" accept=".csv"></div>
+    </div>
+    <button class="btn-run" onclick="initMap()">GENERATE AUDIT MAP</button>
+</div>
+
+<div id="map"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const map = L.map('map').setView([21.14, 79.08], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    let masters = { crew:[], pts:[] }, active = {};
+    let masterData = { stations: [], crew: [], signals: [] };
+    document.getElementById('j_date').valueAsDate = new Date();
 
-    window.onload = () => {
-        Papa.parse("master/crew_master.csv", { download:true, header:true, complete: r => masters.crew = r.data });
-        ["master/station.csv", "master/up_signals.csv", "master/dn_signals.csv", "master/up_mid_signals.csv", "master/dn_mid_signals.csv"].forEach(f => {
-            Papa.parse(f, { download:true, header:true, complete: r => r.data.forEach(s => {
-                let lat = parseFloat(s.Lat || s.LAT), lng = parseFloat(s.Lng || s.LNG), name = s.Station_Name || s.Signal_Name || s.STATION;
-                if(lat && lng) {
-                    L.circleMarker([lat, lng], {radius:f.includes('station')?5:3, color:f.includes('station')?'orange':'blue'}).addTo(map).bindTooltip(name);
-                    masters.pts.push({lat, lng, name});
-                    if(f.includes('station')) {
-                        document.getElementById('fStn').add(new Option(name, name));
-                        document.getElementById('tStn').add(new Option(name, name));
-                    }
-                }
-            })});
+    // 1. Data Loading on Startup
+    window.onload = function() {
+        const nocache = "?t=" + Date.now();
+        
+        // Stations
+        Papa.parse("master/station.csv" + nocache, { download: true, header: true, complete: r => {
+            masterData.stations = r.data;
+            let list = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).join('');
+            document.getElementById('s_from').innerHTML = list;
+            document.getElementById('s_to').innerHTML = list;
+        }});
+
+        // Crew Master Search [cite: 2026-01-08]
+        Papa.parse("master/crew_master.csv" + nocache, { download: true, header: true, complete: r => { masterData.crew = r.data; } });
+
+        // Load 4 Signal Files with Specific Colors
+        const sigConfigs = [
+            { file: 'master/up_signals.csv', clr: 'green', type: 'UP' },
+            { file: 'master/dn_signals.csv', clr: 'blue', type: 'DN' },
+            { file: 'master/up_mid_signals.csv', clr: 'purple', type: 'UP-M' },
+            { file: 'master/dn_mid_signals.csv', clr: 'red', type: 'DN-M' }
+        ];
+
+        sigConfigs.forEach(conf => {
+            Papa.parse(conf.file + nocache, { download: true, header: true, complete: r => {
+                r.data.forEach(s => { s.color = conf.clr; s.typeName = conf.type; masterData.signals.push(s); });
+            }});
         });
     };
 
-    function look(num) {
-        let val = document.getElementById('id'+num).value.toUpperCase();
-        let f = masters.crew.find(x => (x.CREW_ID || x.CLI_ID) === val);
-        document.getElementById('n'+num).innerText = f ? (f.CREW_NAME || f.CLI_NAME) + " [" + (f.DESIGNATION || 'CREW') + "]" : "-";
+    function searchCrew() {
+        let id = document.getElementById('crew_id').value.toUpperCase();
+        let found = masterData.crew.find(c => (c.CREW_ID || c.ID || "").toString().toUpperCase() === id);
+        document.getElementById('crew_display').innerText = "Name: " + (found ? (found.CREW_NAME || found.NAME) : "-");
     }
 
-    function audit() {
-        let file = document.getElementById('rtis').files[0];
-        if(!file) return;
-        Papa.parse(file, { header:true, dynamicTyping:true, complete: r => {
-            let d = r.data.filter(x => (x.Latitude || x.lat) && x.Speed != null);
-            let path = d.map(x => [x.Latitude || x.lat, x.Longitude || x.lng]);
-            L.polyline(path, {color:'red', weight:3}).addTo(map); map.fitBounds(path);
-            draw('cJ', d.map(x=>x.Speed), '#1a73e8');
-            let stop = d.length - 1;
-            for(let i=d.length-1; i>=0; i--) { if(d[i].Speed > 3) { stop = i; break; } }
-            draw('cB', d.slice(Math.max(0, stop-300), stop+10).map(x=>x.Speed), '#d93025');
-        }});
-    }
+    function initMap() {
+        const file = document.getElementById('rtis_file').files[0];
+        if(!file) return alert("RTIS File Select Karein!");
 
-    function draw(id, vals, clr) {
-        if(active[id]) active[id].destroy();
-        active[id] = new Chart(document.getElementById(id), {
-            type:'line', data:{ labels:vals.map((_,i)=>i), datasets:[{data:vals, borderColor:clr, pointRadius:0, fill:false}] },
-            options:{ responsive:true, maintainAspectRatio:false, scales:{x:{display:false}} }
+        document.getElementById('control-panel').style.display = 'none';
+        document.getElementById('map').style.display = 'block';
+
+        const map = L.map('map').setView([21.14, 79.08], 8);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Plot Stations (Rectangle/Banner Logic)
+        masterData.stations.forEach(s => {
+            let lat = parseFloat(s.Start_Lat), lng = parseFloat(s.Start_Lng);
+            if(!isNaN(lat)) {
+                L.marker([lat, lng], {
+                    icon: L.divIcon({ className: 'stn-label', html: `<b style="background:orange; padding:2px; border:1px solid black;">${s.Station_Name}</b>`, iconSize: [50, 20] })
+                }).addTo(map);
+            }
         });
+
+        // Plot Signals (Decided Colors)
+        masterData.signals.forEach(sig => {
+            let lat = parseFloat(sig.LAT || sig.Latitude), lng = parseFloat(sig.LNG || sig.Longitude);
+            if(!isNaN(lat)) {
+                L.circleMarker([lat, lng], { radius: 6, color: sig.color, fillOpacity: 1 }).addTo(map)
+                 .bindTooltip(sig.typeName + ": " + (sig.SIGNAL_NAME || sig.Signal_Name));
+            }
+        });
+
+        // RTIS Path (Moti Black Line)
+        Papa.parse(file, { header: true, complete: function(res) {
+            let path = [];
+            res.data.forEach(row => {
+                let lat = parseFloat(row.LATITUDE || row.LAT), lng = parseFloat(row.LONGITUDE || row.LNG);
+                if(!isNaN(lat)) path.push([lat, lng]);
+            });
+            if(path.length > 0) {
+                L.polyline(path, { color: 'black', weight: 8, opacity: 1 }).addTo(map);
+                map.fitBounds(path);
+            }
+            setTimeout(() => map.invalidateSize(), 400);
+        }});
     }
 </script>
 </body>
