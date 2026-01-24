@@ -1,107 +1,95 @@
 /**
- * STAGE-02 FINAL: CHRONOLOGICAL SIGNAL AUDIT REPORT
- * Features: Route Boundary Filter, Neutral Section Block, CSV Export
+ * STAGE-02 FINAL: CHRONOLOGICAL REPORT + WEB SHARING
  */
 
 function generateAuditReport() {
     if (rtis.length === 0) return alert("Pehle Map Generate Karein!");
-
-    let stnFrom = document.getElementById('s_from').value;
-    let stnTo = document.getElementById('s_to').value;
-    let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === stnFrom);
-    let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === stnTo);
     
-    // Boundary coordinates (NGP hatane ke liye)
-    let startLg = conv(getVal(stnF,['Start_Lng']));
-    let endLg = conv(getVal(stnT,['Start_Lng']));
-    let minLg = Math.min(startLg, endLg);
-    let maxLg = Math.max(startLg, endLg);
-
-    let isDN = (endLg > startLg);
+    let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+    let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+    let isDN = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng'])));
     let activeDir = isDN ? "DN" : "UP";
 
     let auditLog = [];
-
     master.sigs.forEach(sig => {
         let name = getVal(sig, ['SIGNAL_NAME', 'SIGNAL_N']);
         let sLt = conv(getVal(sig, ['Lat'])), sLg = conv(getVal(sig, ['Lng']));
-
-        // --- STRICT FILTERS ---
-        // 1. Only current direction
-        if (!sig.type.startsWith(activeDir)) return;
-        // 2. Block Neutral Sections and LC Gates (Mukesh Ji's instruction)
-        if (name.includes("NS") || name.includes("NEU") || name.includes("LC") || name.includes("L XING")) return;
-        // 3. Route Filter: Only between selected stations (Removes NGP if route is DURG-BSP)
-        if (sLg < minLg || sLg > maxLg) return;
+        if (!sig.type.startsWith(activeDir) || name.includes("NS") || name.includes("LC")) return;
 
         let pts = rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < 0.002);
         if (pts.length > 0) {
             pts.sort((a,b) => Math.sqrt(Math.pow(a.lt-sLt,2)+Math.pow(a.lg-sLg,2)) - Math.sqrt(Math.pow(b.lt-sLt,2)+Math.pow(b.lg-sLg,2)));
             let best = pts[0];
-            
-            // "Logging Time" from 37734.csv
-            let logTime = getVal(best.raw, ['Logging Time', 'Time', 'IST_Time']) || "N/A";
-
             auditLog.push({
-                type: "SIGNAL",
                 name: name,
                 speed: best.spd.toFixed(1),
-                time: logTime,
+                time: getVal(best.raw, ['Logging Time', 'Time']) || "N/A",
+                lat: sLt, lng: sLg,
                 seq: rtis.indexOf(best)
             });
         }
     });
 
-    // Sort by sequence of train movement
     auditLog.sort((a, b) => a.seq - b.seq);
-
-    openDetailedWindow(auditLog, activeDir, stnFrom, stnTo);
+    openAdvancedReport(auditLog, activeDir, stnF.Station_Name, stnT.Station_Name);
 }
 
-function openDetailedWindow(data, dir, from, to) {
+function openAdvancedReport(data, dir, from, to) {
     const reportWin = window.open("", "_blank");
-    const csvHeader = "Asset Type,Location Name,Crossing Speed (Kmph),Crossing Time\n";
-    const csvRows = data.map(r => `${r.type},${r.name},${r.speed},${r.time}`).join("\n");
+    
+    // JSON data for the interactive sharing feature
+    const rtisDataString = JSON.stringify(rtis.map(p => [p.lt, p.lg]));
+    const markerDataString = JSON.stringify(data);
 
     reportWin.document.write(`
-        <html>
-        <head>
-            <title>SECR Audit Report</title>
-            <style>
-                body { font-family: 'Segoe UI', Arial; padding: 20px; background: #f0f2f5; }
-                .report-header { background: #002f6c; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-                table { width: 100%; border-collapse: collapse; background: white; }
-                th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-                th { background: #004085; color: white; position: sticky; top: 0; }
-                tr:nth-child(even) { background: #f9f9f9; }
-                .dl-btn { background: #217346; color: white; padding: 10px 20px; border: none; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
-            </style>
-        </head>
+        <html><head><title>SECR Audit: ${from}-${to}</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <style>
+            body { font-family: Segoe UI, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+            .header { background: #002f6c; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+            .content { display: flex; flex-grow: 1; overflow: hidden; }
+            #mini-map { width: 40%; height: 100%; background: #ddd; }
+            .table-container { width: 60%; overflow-y: auto; padding: 15px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 13px; }
+            th { background: #004085; color: white; position: sticky; top: 0; }
+            tr:hover { background: #f1f1f1; cursor: pointer; }
+            .btn-share { background: #ffc107; color: black; padding: 8px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        </style></head>
         <body>
-            <div class="report-header">
-                <h2>SECR SIGNAL AUDIT REPORT</h2>
-                <p>Route: ${from} to ${to} | Direction: ${dir} | Signals Detected: ${data.length}</p>
+            <div class="header">
+                <div><b>SECR AUDIT:</b> ${from} to ${to} (${dir})</div>
+                <button class="btn-share" onclick="exportFullHTML()">💾 SAVE INTERACTIVE REPORT (HTML)</button>
             </div>
-            <button class="dl-btn" onclick="downloadCSV()">💾 DOWNLOAD EXCEL</button>
-            <table>
-                <thead>
-                    <tr><th>Asset Type</th><th>Location Name</th><th>Crossing Speed (Kmph)</th><th>Crossing Time</th></tr>
-                </thead>
-                <tbody>
-                    ${data.map(r => `<tr><td>${r.type}</td><td><b>${r.name}</b></td><td>${r.speed}</td><td>${r.time}</td></tr>`).join('')}
-                </tbody>
-            </table>
+            <div class="content">
+                <div id="mini-map"></div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>Signal Name</th><th>Speed (Kmph)</th><th>Time</th></tr>
+                        ${data.map((r, i) => `<tr onclick="focusSig(${r.lat}, ${r.lng})"><td><b>${r.name}</b></td><td style="color:red"><b>${r.speed}</b></td><td>${r.time}</td></tr>`).join('')}
+                    </table>
+                </div>
+            </div>
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <script>
-                function downloadCSV() {
-                    let blob = new Blob([\`${csvHeader + csvRows}\`], {type: 'text/csv'});
-                    let a = document.body.appendChild(document.createElement("a"));
+                const map = L.map('mini-map').setView([${data[0]?.lat || 0}, ${data[0]?.lng || 0}], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                const path = L.polyline(${rtisDataString}, {color: 'black', weight: 3}).addTo(map);
+                const markers = ${markerDataString};
+                markers.forEach(m => {
+                    L.circleMarker([m.lat, m.lng], {radius: 6, color: 'blue'}).addTo(map).bindTooltip(m.name + " (" + m.speed + " Kmph)");
+                });
+                function focusSig(lt, lg) { map.setView([lt, lg], 15); }
+                
+                function exportFullHTML() {
+                    const htmlContent = document.documentElement.outerHTML;
+                    const blob = new Blob([htmlContent], {type: 'text/html'});
+                    const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
-                    a.download = "Audit_Report_${from}_${to}.csv";
+                    a.download = "Audit_Experience_${from}_${to}.html";
                     a.click();
-                    a.remove();
                 }
             </script>
-        </body>
-        </html>
+        </body></html>
     `);
 }
