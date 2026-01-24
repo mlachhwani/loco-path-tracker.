@@ -1,38 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR AUDIT - TRANSPARENT MAPPING</title>
+    <title>SECR AUDIT - FINAL FIX</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Arial; display: flex; height: 100vh; }
-        #sidebar { width: 300px; background: #002f6c; color: white; padding: 20px; z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+        body { margin: 0; font-family: Arial; display: flex; height: 100vh; }
+        #sidebar { width: 300px; background: #002f6c; color: white; padding: 20px; z-index: 1000; }
         #map { flex-grow: 1; }
-        /* Transparent Station Label Style */
-        .stn-label-transparent { 
-            background: rgba(255, 165, 0, 0.2); /* 20% Transparent Orange */
-            border: 1px dashed orange; 
-            font-weight: bold; 
-            color: #d35400; 
-            font-size: 11px; 
-            text-align: center;
-            border-radius: 5px;
-            pointer-events: none; /* Mouse signals tak pahunch sake */
-        }
+        /* Station label ko transparent rakha hai taaki signals dikhen */
+        .stn-label { background: rgba(255, 165, 0, 0.4); border: 1px solid orange; font-weight: bold; font-size: 10px; padding: 2px; color: black; border-radius: 3px; pointer-events: none; }
         .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 9px; font-weight: bold; padding: 1px; border-radius: 2px; }
-        select, input, button { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border-radius: 4px; border: none; font-weight: bold; }
-        button { background: #28a745; color: white; cursor: pointer; border: 1px solid white; }
+        select, input, button { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 4px; font-weight: bold; }
+        button { background: #28a745; color: white; cursor: pointer; border: none; font-size: 16px; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h2 style="border-bottom: 1px solid red;">SECR AUDIT</h2>
+    <h3 style="border-bottom: 2px solid red;">SECR AUDIT</h3>
     <label>FROM STATION</label><select id="s_from"></select>
     <label>TO STATION</label><select id="s_to"></select>
-    <label>RTIS DATA (22935.csv)</label><input type="file" id="csv_file">
-    <button onclick="drawMap()">GENERATE AUDIT MAP</button>
-    <div id="status" style="color: #00ff00; font-size: 12px; margin-top: 10px;">Ready...</div>
+    <label>RTIS CSV (22935.csv)</label><input type="file" id="csv_file">
+    <button onclick="drawMap()">GENERATE MAP</button>
+    <div id="status" style="margin-top:10px; color: yellow; font-size: 12px;">System Ready.</div>
 </div>
 
 <div id="map"></div>
@@ -48,7 +39,7 @@
     }
 
     function getSpd(lt, lg) {
-        if(rtis.length === 0) return "N/A";
+        if(rtis.length === 0) return "0.0";
         let best = 0.008, s = "0.0";
         for(let p of rtis) {
             let d = Math.sqrt(Math.pow(p.lt-lt, 2) + Math.pow(p.lg-lng, 2));
@@ -59,11 +50,13 @@
 
     window.onload = function() {
         const t = Date.now();
+        // Load Stations
         Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
             master.stns = r.data;
             let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
             document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
         }});
+        // Load All Signals
         const cfgs = [
             {f:'up_signals.csv', c:'green', t:'UP'}, {f:'dn_signals.csv', c:'blue', t:'DN'},
             {f:'up_mid_signals.csv', c:'purple', t:'UP-M'}, {f:'dn_mid_signals.csv', c:'red', t:'DN-M'}
@@ -79,14 +72,14 @@
         const fileInput = document.getElementById('csv_file').files[0];
         if(!fileInput) return alert("Select File!");
 
-        const map = L.map('map').setView([21.15, 79.12], 12);
+        const map = L.map('map').setView([21.15, 79.12], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(fileInput, {header:true, skipEmptyLines:true, complete: function(res) {
             rtis = []; let path = [];
             let stnF = master.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
             let stnT = master.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
-            let dir = (conv(stnT.Start_Lng) > conv(stnF.Start_Lng)) ? "DN" : "UP";
+            let activeDir = (conv(stnT.Start_Lng) > conv(stnF.Start_Lng)) ? "DN" : "UP";
 
             res.data.forEach(row => {
                 let lt = parseFloat(row.Latitude), lg = parseFloat(row.Longitude);
@@ -97,44 +90,38 @@
             });
 
             // 1. Draw Journey Line
-            L.polyline(path, {color: 'black', weight: 4, opacity: 0.6}).addTo(map);
+            if(path.length > 0) {
+                L.polyline(path, {color: 'black', weight: 4}).addTo(map);
+                map.fitBounds(path);
+            }
 
-            // 2. Map Stations (Transparent Labels)
-            master.stns.forEach(s => {
-                let lt = conv(s['Start_Lat ']) || conv(s['Start_Lat']);
-                let lg = conv(s['Start_Lng']);
-                if(lt && lg) {
-                    L.marker([lt, lg], {
-                        icon: L.divIcon({className: 'stn-label-transparent', html: s.Station_Name, iconSize: [60, 20]})
-                    }).addTo(map);
-                }
-            });
-
-            // 3. Map Signals (Strict Direction - Over Stations)
+            // 2. Map Signals First
             master.sigs.forEach(sig => {
                 let sLt = conv(sig.Lat), sLg = conv(sig.Lng);
-                if(sLt && sig.type.includes(dir)) {
+                if(sLt && sig.type.includes(activeDir)) {
                     let spd = getSpd(sLt, sLg);
-                    let mkr = L.circleMarker([sLt, sLg], {
-                        radius: 7, 
-                        color: sig.clr, 
-                        fillOpacity: 1, 
-                        weight: 2,
-                        zIndexOffset: 1000 // Ensure Signal is always on top
-                    }).addTo(map);
+                    let mkr = L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr, fillOpacity: 1, zIndexOffset: 1000}).addTo(map);
                     
-                    mkr.bindTooltip(sig.SIGNAL_NAME + " | Speed: " + spd);
-
-                    if(spd !== "N/A") {
-                        L.marker([sLt - 0.0003, sLg], {
-                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[24,12]})
+                    if(spd !== "0.0") {
+                        L.marker([sLt - 0.0004, sLg], {
+                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[22,12]})
                         }).addTo(map);
                     }
                 }
             });
 
-            if(path.length > 0) map.fitBounds(path);
-            document.getElementById('status').innerText = "Mapped " + dir + " Movement Successfully.";
+            // 3. Map Stations (Transparent labels)
+            master.stns.forEach(s => {
+                let lt = conv(s['Start_Lat ']) || conv(s['Start_Lat']);
+                let lg = conv(s['Start_Lng']);
+                if(lt && lg) {
+                    L.marker([lt, lg], {
+                        icon: L.divIcon({className: 'stn-label', html: s.Station_Name, iconSize: [50, 15]})
+                    }).addTo(map);
+                }
+            });
+            
+            document.getElementById('status').innerText = "Mapped " + activeDir + " Movement.";
         }});
     }
 </script>
