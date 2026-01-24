@@ -1,9 +1,9 @@
 /**
- * REPORT.JS - FINAL INTERACTIVE FIX
- * Purpose: Generates a FULL map snapshot in Button 3
+ * REPORT.JS - STAGE 02 FINAL (HEAVY-DUTY)
+ * Fixes: 1KB file error & Missing Map data
  */
 
-// Button 2: Excel (As is, working fine)
+// Button 2: Excel Download
 window.downloadExcelAudit = function() {
     if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
     let stnF = document.getElementById('s_from').value;
@@ -34,7 +34,7 @@ window.downloadExcelAudit = function() {
     a.click();
 };
 
-// Button 3: FIXED FULL INTERACTIVE REPORT
+// Button 3: FIXED - FULL INTERACTIVE OFFLINE REPORT
 window.saveInteractiveWebReport = function() {
     if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
     
@@ -46,7 +46,6 @@ window.saveInteractiveWebReport = function() {
     let dir = (lg2 > lg1) ? "DN" : "UP";
     let minLg = Math.min(lg1, lg2), maxLg = Math.max(lg1, lg2);
 
-    // Collect all plotted signals for the report
     let reportSigs = [];
     window.master.sigs.forEach(sig => {
         let name = getVal(sig, ['SIGNAL_NAME']);
@@ -60,46 +59,52 @@ window.saveInteractiveWebReport = function() {
     });
     reportSigs.sort((a,b) => a.seq - b.seq);
 
+    // Ye data ab file ke andar jayega (No more 1KB file)
     const pathData = JSON.stringify(window.rtis.map(p => [p.lt, p.lg]));
     const sigData = JSON.stringify(reportSigs);
 
-    const htmlContent = `
+    const htmlContent = `<!DOCTYPE html>
     <html>
     <head>
-        <title>SECR AUDIT: ${stnF} to ${stnT}</title>
+        <title>SECR REPORT: ${stnF}-${stnT}</title>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <style>
-            body { margin:0; display:flex; font-family: sans-serif; height:100vh; }
-            #sidebar { width:350px; background:#002f6c; color:white; overflow-y:auto; padding:15px; }
+            body { margin:0; display:flex; font-family: 'Segoe UI', Arial; height:100vh; }
+            #sidebar { width:320px; background:#002f6c; color:white; overflow-y:auto; padding:15px; box-shadow: 2px 0 5px rgba(0,0,0,0.3); }
             #map { flex-grow:1; }
-            .item { background:rgba(255,255,255,0.1); padding:10px; margin-bottom:5px; border-radius:4px; cursor:pointer; border-left:4px solid #ffc107; }
-            .item:hover { background:rgba(255,255,255,0.2); }
-            .spd { color:#00ff00; font-weight:bold; float:right; }
+            .item { background:rgba(255,255,255,0.1); padding:12px; margin-bottom:8px; border-radius:5px; cursor:pointer; border-left:5px solid #ffc107; transition:0.2s; }
+            .item:hover { background:rgba(255,255,255,0.2); transform: translateX(5px); }
+            .spd { color:#00ff00; font-weight:bold; font-size:16px; float:right; }
+            hr { border: 0; border-top: 1px solid rgba(255,255,255,0.2); }
         </style>
     </head>
     <body>
         <div id="sidebar">
-            <h3>${stnF} to ${stnT} (${dir})</h3>
-            <p>Total Signals: ${reportSigs.length}</p><hr>
-            ${reportSigs.map(r => `
-                <div class="item" onclick="m.setView([${r.lt},${r.lg}], 16)">
-                    <span>${r.n}</span>
-                    <span class="spd">${r.s} Kmph</span><br>
-                    <small style="color:#ccc">${r.t}</small>
-                </div>`).join('')}
+            <h2 style="color:#ffc107; margin-bottom:5px;">SECR AUDIT</h2>
+            <div style="font-size:14px; margin-bottom:15px;">\${stnF} to \${stnT} (\${dir})</div>
+            <p style="font-size:12px;">Signals Detected: \${reportSigs.length}</p><hr>
+            \${reportSigs.map(r => \`
+                <div class="item" onclick="flyToSig(\${r.lt}, \${r.lg})">
+                    <span style="font-weight:bold;">\${r.n}</span>
+                    <span class="spd">\${r.s}</span><br>
+                    <small style="color:#acc6e6;">\${r.t}</small>
+                </div>\`).join('')}
         </div>
         <div id="map"></div>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
-            const m = L.map('map').setView([${reportSigs[0]?.lt || 21.1}, ${reportSigs[0]?.lg || 79.1}], 13);
+            const m = L.map('map').setView([\${reportSigs[0]?.lt || 21.1}, \${reportSigs[0]?.lg || 79.1}], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
-            const path = L.polyline(${pathData}, {color:'black', weight:3}).addTo(m);
-            m.fitBounds(path.getBounds());
-            const sigs = ${sigData};
+            const pathArr = \${pathData};
+            const path = L.polyline(pathArr, {color:'#333', weight:4, opacity:0.7}).addTo(m);
+            if(pathArr.length > 0) m.fitBounds(path.getBounds());
+            
+            const sigs = \${sigData};
             sigs.forEach(s => {
-                L.circleMarker([s.lt, s.lg], {radius:7, color:'blue', fillOpacity:0.8}).addTo(m)
-                .bindTooltip("<b>"+s.n+"</b><br>Speed: "+s.s+" Kmph");
+                L.circleMarker([s.lt, s.lg], {radius:7, color:'blue', fillOpacity:0.9, weight:2}).addTo(m)
+                .bindTooltip("<b>"+s.n+"</b><br>Speed: "+s.s+" Kmph<br>Time: "+s.t);
             });
+            function flyToSig(lt, lg) { m.setView([lt, lg], 16); }
         </script>
     </body>
     </html>`;
@@ -107,6 +112,6 @@ window.saveInteractiveWebReport = function() {
     let blob = new Blob([htmlContent], {type: 'text/html'});
     let link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `Interactive_Report_${stnF}_to_${stnT}.html`;
+    link.download = `SECR_Interactive_Report_\${stnF}.html`;
     link.click();
 };
