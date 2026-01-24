@@ -116,4 +116,40 @@
             // Plot Assets
             master.sigs.forEach(sig => {
                 let sLt = toDec(sig.Lat), sLg = toDec(sig.Lng);
-                if(sLt && sig.type.includes(
+                if(sLt && sig.type.includes(dir)) {
+                    let spd = findSpeedAt(sLt, sLg);
+                    let name = sig.SIGNAL_NAME.toUpperCase();
+                    let mkr;
+
+                    if(name.includes("L XING") || name.includes("GATE")) {
+                        mkr = L.marker([sLt, sLg], {icon: L.divIcon({className:'lc-icon', html:'X', iconSize:[14,14]})});
+                    } else {
+                        mkr = L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr, fillOpacity: 1, weight: 1});
+                    }
+
+                    mkr.addTo(map).bindTooltip(`${name}<br><b>Speed: ${spd} Kmph</b>`);
+                    
+                    // Permanent Speed Label
+                    if(spd !== "N/A") {
+                        L.marker([sLt - 0.0003, sLg], {
+                            icon: L.divIcon({className: 'speed-tag', html: Math.round(spd), iconSize: [22, 12]})
+                        }).addTo(map);
+                    }
+                }
+            });
+
+            // Plot Stations
+            master.stns.forEach(s => {
+                let lt = toDec(s['Start_Lat ']), lg = toDec(s['Start_Lng']);
+                if(lt) {
+                    L.marker([lt, lg], {icon: L.divIcon({className:'stn-label', html: s.Station_Name, iconSize:[50,18]})}).addTo(map);
+                }
+            });
+
+            map.fitBounds(pathPoints);
+            document.getElementById('status').innerText = "Audit Map Generated Successfully!";
+        }});
+    }
+</script>
+</body>
+</html>
