@@ -1,28 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR AUDIT - SIGNAL RECOVERY FIX</title>
+    <title>SECR AUDIT - 100% RECOVERY</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { margin: 0; font-family: Arial; display: flex; height: 100vh; }
-        #sidebar { width: 300px; background: #002f6c; color: white; padding: 20px; z-index: 1000; }
-        #map { flex-grow: 1; background: #eee; }
-        .stn-label { background: rgba(255, 165, 0, 0.6); border: 1px solid black; font-weight: bold; font-size: 10px; padding: 2px; border-radius: 3px; pointer-events: none; }
+        body { margin: 0; font-family: 'Segoe UI', Arial; display: flex; height: 100vh; }
+        #sidebar { width: 320px; background: #002f6c; color: white; padding: 20px; z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+        #map { flex-grow: 1; background: #f0f0f0; }
+        .stn-label { background: rgba(255, 165, 0, 0.4); border: 1px solid orange; font-weight: bold; font-size: 10px; padding: 2px; border-radius: 3px; color: black; pointer-events: none; }
         .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 3px; border-radius: 2px; box-shadow: 1px 1px 2px black; }
-        select, input, button { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; }
-        button { background: #28a745; color: white; cursor: pointer; border: none; }
+        select, input, button { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: none; font-weight: bold; }
+        button { background: #28a745; color: white; cursor: pointer; font-size: 16px; border-bottom: 3px solid #1e7e34; }
+        button:active { border-bottom: none; transform: translateY(2px); }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h2 style="border-bottom: 2px solid red;">SECR AUDIT</h2>
+    <h2 style="border-bottom: 2px solid #d93025; padding-bottom: 10px;">SECR AUDIT</h2>
     <label>FROM STATION</label><select id="s_from"></select>
     <label>TO STATION</label><select id="s_to"></select>
-    <label>UPLOAD 22935.CSV</label><input type="file" id="csv_file">
-    <button onclick="drawMap()">GENERATE MAP</button>
-    <div id="debug" style="font-size: 11px; color: #acc6e6; margin-top: 10px;">Status: Initializing...</div>
+    <label>RTIS DATA (22935.csv)</label><input type="file" id="csv_file">
+    <button onclick="drawMap()">GENERATE AUDIT MAP</button>
+    <div id="log" style="font-size: 12px; color: #acc6e6; margin-top: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px;">
+        Status: Waiting for Data...
+    </div>
 </div>
 
 <div id="map"></div>
@@ -31,34 +34,32 @@
 <script>
     let master = { stns: [], sigs: [] }, rtis = [];
 
-    // Simple Converter
+    // Powerful Coordinate Converter
     function conv(v) {
         if(!v) return null;
-        let n = parseFloat(v.toString().trim());
+        let n = parseFloat(v.toString().replace(/[^0-9.]/g, ''));
         if(isNaN(n)) return null;
         return Math.floor(n/100) + ((n%100)/60);
     }
 
-    // Speed Matcher
-    function getSpd(lt, lg) {
-        let best = 0.008, s = "0.0";
-        for(let p of rtis) {
-            let d = Math.sqrt(Math.pow(p.lt-lt, 2) + Math.pow(p.lg-lng, 2));
-            if(d < best) { best = d; s = p.spd.toFixed(1); }
-        }
-        return s;
+    // Header Finder: Finds column even with spaces or different cases
+    function getVal(row, keys) {
+        let foundKey = Object.keys(row).find(k => keys.some(key => k.trim().toLowerCase() === key.toLowerCase()));
+        return foundKey ? row[foundKey] : null;
     }
 
     window.onload = function() {
+        const t = Date.now();
         // Load Stations
-        Papa.parse("master/station.csv", {download:true, header:true, skipEmptyLines:true, 
-            complete: r => {
-                master.stns = r.data;
-                let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
-                document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
-                document.getElementById('debug').innerHTML += "<br>Stations Loaded.";
-            }
-        });
+        Papa.parse("master/station.csv?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
+            master.stns = r.data;
+            let h = r.data.map(s => {
+                let name = getVal(s, ['Station_Name', 'STATION']);
+                return name ? `<option value="${name}">${name}</option>` : '';
+            }).sort().join('');
+            document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
+            document.getElementById('log').innerHTML = "✅ Stations Loaded.";
+        }});
 
         // Load Signals
         const files = [
@@ -66,49 +67,53 @@
             {f:'up_mid_signals.csv', c:'purple', t:'UP-M'}, {f:'dn_mid_signals.csv', c:'red', t:'DN-M'}
         ];
         files.forEach(cfg => {
-            Papa.parse("master/" + cfg.f, {download:true, header:true, skipEmptyLines:true, 
-                complete: r => {
-                    r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; master.sigs.push(s); });
-                    document.getElementById('debug').innerHTML = "Master Data Ready.";
-                }
-            });
+            Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
+                r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; master.sigs.push(s); });
+                document.getElementById('log').innerHTML = "✅ Master Files Ready.";
+            }});
         });
     };
 
     function drawMap() {
         const file = document.getElementById('csv_file').files[0];
-        if(!file) return alert("Select File!");
+        if(!file) return alert("Please select RTIS file!");
 
-        const map = L.map('map').setView([21.15, 79.12], 10);
+        const map = L.map('map').setView([21.15, 79.12], 11);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
             rtis = []; let path = [];
             
-            // Direction Logic
-            let stnF = master.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
-            let stnT = master.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
-            let activeDir = (stnF && stnT && conv(stnT.Start_Lng) > conv(stnF.Start_Lng)) ? "DN" : "UP";
+            let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+            let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+            
+            let isDN = (conv(getVal(stnT, ['Start_Lng', 'Lng'])) > conv(getVal(stnF, ['Start_Lng', 'Lng'])));
+            let activeDir = isDN ? "DN" : "UP";
 
             res.data.forEach(row => {
-                let lt = parseFloat(row.Latitude), lg = parseFloat(row.Longitude);
+                let lt = parseFloat(getVal(row, ['Latitude', 'Lat'])), lg = parseFloat(getVal(row, ['Longitude', 'Lng']));
                 if(!isNaN(lt)) {
-                    rtis.push({lt, lg, spd: parseFloat(row.Speed)});
+                    rtis.push({lt, lg, spd: parseFloat(getVal(row, ['Speed', 'Spd']))});
                     path.push([lt, lg]);
                 }
             });
 
-            // 1. Path Line
-            L.polyline(path, {color: 'black', weight: 4}).addTo(map);
+            // 1. Journey Line
+            L.polyline(path, {color: 'black', weight: 4, opacity: 0.8}).addTo(map);
 
-            // 2. Signals (Strict Force)
+            // 2. Signals (Force Mapping)
             let sigCount = 0;
             master.sigs.forEach(sig => {
-                let sLt = conv(sig.Lat), sLg = conv(sig.Lng);
+                let sLt = conv(getVal(sig, ['Lat'])), sLg = conv(getVal(sig, ['Lng']));
                 if(sLt && sig.type.includes(activeDir)) {
-                    let spd = getSpd(sLt, sLg);
+                    let spd = "0.0";
+                    for(let p of rtis) {
+                        let d = Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2));
+                        if(d < 0.008) { spd = p.spd.toFixed(1); break; }
+                    }
+                    
                     L.circleMarker([sLt, sLg], {radius: 7, color: sig.clr, fillOpacity: 1, zIndexOffset: 1000}).addTo(map)
-                     .bindTooltip(sig.SIGNAL_NAME + " Spd: " + spd);
+                     .bindTooltip(getVal(sig, ['SIGNAL_NAME']) + " | Spd: " + spd);
                     
                     if(spd !== "0.0") {
                         L.marker([sLt - 0.0004, sLg], {
@@ -122,15 +127,15 @@
 
             // 3. Stations
             master.stns.forEach(s => {
-                let lt = conv(s['Start_Lat ']) || conv(s['Start_Lat']);
-                let lg = conv(s['Start_Lng']);
+                let lt = conv(getVal(s, ['Start_Lat ', 'Start_Lat', 'Lat']));
+                let lg = conv(getVal(s, ['Start_Lng', 'Lng']));
                 if(lt && lg) {
-                    L.marker([lt, lg], {icon: L.divIcon({className:'stn-label', html: s.Station_Name, iconSize:[50,15]})}).addTo(map);
+                    L.marker([lt, lg], {icon: L.divIcon({className: 'stn-label', html: getVal(s, ['Station_Name']), iconSize: [50, 15]})}).addTo(map);
                 }
             });
 
             if(path.length > 0) map.fitBounds(path);
-            document.getElementById('debug').innerHTML = "Mapped: " + activeDir + " (" + sigCount + " signals)";
+            document.getElementById('log').innerHTML = `SUCCESS!<br>Direction: ${activeDir}<br>Signals: ${sigCount}`;
         }});
     }
 </script>
