@@ -1,29 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR AUDIT - FINAL FIX</title>
+    <title>SECR AUDIT - 100% RECOVERY</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         body { margin: 0; font-family: Arial; display: flex; height: 100vh; }
         #sidebar { width: 300px; background: #002f6c; color: white; padding: 20px; z-index: 1000; }
         #map { flex-grow: 1; }
-        /* Station label ko transparent rakha hai taaki signals dikhen */
-        .stn-label { background: rgba(255, 165, 0, 0.4); border: 1px solid orange; font-weight: bold; font-size: 10px; padding: 2px; color: black; border-radius: 3px; pointer-events: none; }
-        .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 9px; font-weight: bold; padding: 1px; border-radius: 2px; }
-        select, input, button { width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 4px; font-weight: bold; }
-        button { background: #28a745; color: white; cursor: pointer; border: none; font-size: 16px; }
+        .stn-label { background: rgba(255, 165, 0, 0.5); border: 1px solid #000; font-weight: bold; font-size: 10px; padding: 2px; border-radius: 3px; color: black; pointer-events: none; white-space: nowrap; }
+        .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 2px; border-radius: 2px; }
+        select, input, button { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: none; font-weight: bold; }
+        button { background: #28a745; color: white; cursor: pointer; font-size: 16px; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h3 style="border-bottom: 2px solid red;">SECR AUDIT</h3>
+    <h3 style="border-bottom: 2px solid red;">SECR AUDIT TOOL</h3>
     <label>FROM STATION</label><select id="s_from"></select>
     <label>TO STATION</label><select id="s_to"></select>
     <label>RTIS CSV (22935.csv)</label><input type="file" id="csv_file">
-    <button onclick="drawMap()">GENERATE MAP</button>
-    <div id="status" style="margin-top:10px; color: yellow; font-size: 12px;">System Ready.</div>
+    <button onclick="drawMap()">GENERATE AUDIT MAP</button>
+    <div id="status" style="margin-top:10px; color: #00ff00; font-size: 12px;">Waiting for input...</div>
 </div>
 
 <div id="map"></div>
@@ -32,10 +31,16 @@
 <script>
     let master = { stns: [], sigs: [] }, rtis = [];
 
+    // Powerful Coordinate Repair & Convert
     function conv(v) {
         if(!v) return null;
-        let n = parseFloat(v);
-        return isNaN(n) ? null : Math.floor(n/100) + ((n%100)/60);
+        let s = v.toString().trim();
+        let n = parseFloat(s);
+        if(isNaN(n)) return null;
+        // DDMM.MMMM to Decimal
+        let deg = Math.floor(n / 100);
+        let min = n % 100;
+        return deg + (min / 60);
     }
 
     function getSpd(lt, lg) {
@@ -50,19 +55,19 @@
 
     window.onload = function() {
         const t = Date.now();
-        // Load Stations
-        Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
+        // 1. Load Stations
+        Papa.parse("master/station.csv?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
             master.stns = r.data;
-            let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
+            let h = r.data.map(s => s.Station_Name ? `<option value="${s.Station_Name}">${s.Station_Name}</option>` : '').sort().join('');
             document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
         }});
-        // Load All Signals
+        // 2. Load All Signals
         const cfgs = [
             {f:'up_signals.csv', c:'green', t:'UP'}, {f:'dn_signals.csv', c:'blue', t:'DN'},
             {f:'up_mid_signals.csv', c:'purple', t:'UP-M'}, {f:'dn_mid_signals.csv', c:'red', t:'DN-M'}
         ];
         cfgs.forEach(cfg => {
-            Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, complete: r => {
+            Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
                 r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; master.sigs.push(s); });
             }});
         });
@@ -72,14 +77,16 @@
         const fileInput = document.getElementById('csv_file').files[0];
         if(!fileInput) return alert("Select File!");
 
-        const map = L.map('map').setView([21.15, 79.12], 11);
+        const map = L.map('map').setView([21.15, 79.12], 10);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(fileInput, {header:true, skipEmptyLines:true, complete: function(res) {
             rtis = []; let path = [];
             let stnF = master.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
             let stnT = master.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
-            let activeDir = (conv(stnT.Start_Lng) > conv(stnF.Start_Lng)) ? "DN" : "UP";
+            
+            let isDN = (conv(stnT.Start_Lng) > conv(stnF.Start_Lng));
+            let activeDir = isDN ? "DN" : "UP";
 
             res.data.forEach(row => {
                 let lt = parseFloat(row.Latitude), lg = parseFloat(row.Longitude);
@@ -89,39 +96,42 @@
                 }
             });
 
-            // 1. Draw Journey Line
+            // 1. Journey Line (Black)
             if(path.length > 0) {
-                L.polyline(path, {color: 'black', weight: 4}).addTo(map);
+                L.polyline(path, {color: 'black', weight: 4, opacity: 0.7}).addTo(map);
                 map.fitBounds(path);
             }
 
-            // 2. Map Signals First
-            master.sigs.forEach(sig => {
-                let sLt = conv(sig.Lat), sLg = conv(sig.Lng);
-                if(sLt && sig.type.includes(activeDir)) {
-                    let spd = getSpd(sLt, sLg);
-                    let mkr = L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr, fillOpacity: 1, zIndexOffset: 1000}).addTo(map);
-                    
-                    if(spd !== "0.0") {
-                        L.marker([sLt - 0.0004, sLg], {
-                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[22,12]})
-                        }).addTo(map);
-                    }
-                }
-            });
-
-            // 3. Map Stations (Transparent labels)
+            // 2. Stations (Transparent)
             master.stns.forEach(s => {
                 let lt = conv(s['Start_Lat ']) || conv(s['Start_Lat']);
                 let lg = conv(s['Start_Lng']);
                 if(lt && lg) {
                     L.marker([lt, lg], {
-                        icon: L.divIcon({className: 'stn-label', html: s.Station_Name, iconSize: [50, 15]})
+                        icon: L.divIcon({className: 'stn-label', html: s.Station_Name, iconSize: [50, 16]})
                     }).addTo(map);
                 }
             });
+
+            // 3. Signals (Solid & Force Load)
+            master.sigs.forEach(sig => {
+                let sLt = conv(sig.Lat), sLg = conv(sig.Lng);
+                if(sLt && sig.type.includes(activeDir)) {
+                    let spd = getSpd(sLt, sLg);
+                    let mkr = L.circleMarker([sLt, sLg], {
+                        radius: 7, color: sig.clr, fillOpacity: 1, weight: 2, zIndexOffset: 1000
+                    }).addTo(map);
+                    
+                    if(spd !== "0.0") {
+                        L.marker([sLt - 0.0004, sLg], {
+                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[24,12]}),
+                            zIndexOffset: 1100
+                        }).addTo(map);
+                    }
+                }
+            });
             
-            document.getElementById('status').innerText = "Mapped " + activeDir + " Movement.";
+            document.getElementById('status').innerText = "Data Loaded: " + activeDir + " Movement.";
         }});
     }
 </script>
