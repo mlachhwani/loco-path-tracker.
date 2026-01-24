@@ -1,51 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR SAFETY AUDIT - FINAL MASTER</title>
+    <title>SECR SAFETY AUDIT - M. LACHHWANI</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
-        #sidebar { width: 350px; background: #002f6c; color: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 1000; }
-        #map { flex-grow: 1; background: #e5e5e5; }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; font-size: 12px; margin-bottom: 5px; color: #acc6e6; }
-        select, input { width: 100%; padding: 10px; border-radius: 5px; border: none; font-weight: bold; }
-        .btn-go { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 8px; margin-top: 10px; }
-        .btn-go:hover { background: #218838; }
-        /* Map Markers */
-        .stn-label { background: #ffa500; border: 1.5px solid #000; font-weight: bold; padding: 2px 5px; font-size: 11px; text-align: center; border-radius: 3px; white-space: nowrap; }
-        .speed-tag { background: rgba(255,255,255,0.9); border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 3px; border-radius: 3px; text-align: center; }
-        .lc-icon { background: #ffff00; border: 2px solid #000; text-align: center; font-weight: bold; font-size: 12px; line-height: 14px; }
+        body { margin: 0; font-family: 'Segoe UI', Arial; display: flex; height: 100vh; }
+        #sidebar { width: 320px; background: #002f6c; color: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 1000; overflow-y: auto; }
+        #map { flex-grow: 1; background: #f0f0f0; }
+        .input-box { margin-bottom: 15px; }
+        label { display: block; font-size: 11px; margin-bottom: 5px; color: #acc6e6; letter-spacing: 1px; }
+        select, input { width: 100%; padding: 10px; border-radius: 4px; border: none; font-weight: bold; background: #f8f9fa; color: #333; }
+        .btn-generate { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 6px; margin-top: 10px; }
+        .btn-generate:hover { background: #218838; }
+        
+        /* Marker Styles */
+        .stn-label { background: #ffa500; border: 1.5px solid black; font-weight: bold; padding: 2px 4px; font-size: 10px; border-radius: 3px; text-align: center; color: black; }
+        .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 2px; border-radius: 3px; text-align: center; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
+        .lc-icon { background: yellow; border: 2px solid black; text-align: center; font-weight: bold; font-size: 11px; line-height: 12px; color: black; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h2 style="margin-top:0; border-bottom: 2px solid #d93025; padding-bottom: 10px;">SECR AUDIT</h2>
-    <div class="input-group">
+    <h2 style="margin-top:0; border-bottom: 2px solid #d93025; padding-bottom: 10px; font-size: 20px;">SECR AUDIT TOOL</h2>
+    
+    <div class="input-box">
         <label>FROM STATION</label>
         <select id="s_from"></select>
     </div>
-    <div class="input-group">
+    
+    <div class="input-box">
         <label>TO STATION</label>
         <select id="s_to"></select>
     </div>
-    <div class="input-group">
-        <label>UPLOAD RTIS CSV (22935.csv)</label>
+
+    <div class="input-box">
+        <label>RTIS DATA (22935.csv)</label>
         <input type="file" id="rtis_csv" accept=".csv">
     </div>
-    <button class="btn-go" onclick="generateAudit()">GENERATE MAP</button>
-    <div id="status" style="margin-top:20px; font-size: 13px; color: #acc6e6;">Status: Ready</div>
+
+    <button class="btn-generate" onclick="runFinalAudit()">GENERATE AUDIT MAP</button>
+    
+    <div id="status" style="margin-top:20px; font-size: 12px; color: #acc6e6; line-height: 1.5;">
+        <b>SYSTEM STATUS:</b><br>
+        - Directional Logic Locked.<br>
+        - DN Movement: DN + DN_MID mapped.<br>
+        - UP Movement: UP + UP_MID mapped.
+    </div>
 </div>
 
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    let master = { stns: [], sigs: [] }, rtis = [];
+    let masterData = { stns: [], sigs: [] }, rtisData = [];
 
-    // Converter: 2109.27230 -> 21.154538
     function toDec(v) {
         if(!v || isNaN(v)) return null;
         let d = Math.floor(v/100);
@@ -53,101 +63,101 @@
         return d + (m/60);
     }
 
-    // Har asset ke liye nearest speed dhoondhna
-    function findSpeedAt(lat, lng) {
-        if(rtis.length === 0) return "N/A";
-        let minDest = 0.005; // ~500 meter search radius
+    function getSpeed(lat, lng) {
+        if(rtisData.length === 0) return "N/A";
+        let minD = 0.008; // Increased radius for better signal matching
         let speed = "0.0";
-        rtis.forEach(p => {
+        for(let p of rtisData) {
             let d = Math.sqrt(Math.pow(p.lt-lat, 2) + Math.pow(p.lg-lng, 2));
-            if(d < minDest) {
-                minDest = d;
-                speed = p.spd.toFixed(1);
-            }
-        });
+            if(d < minD) { minD = d; speed = p.spd.toFixed(1); }
+        }
         return speed;
     }
 
     window.onload = function() {
-        const t = Date.now();
-        // Load Stations
-        Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
-            master.stns = r.data;
-            let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
-            document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
+        const cacheBurst = "?t=" + Date.now();
+        Papa.parse("master/station.csv" + cacheBurst, {download:true, header:true, complete: r => {
+            masterData.stns = r.data;
+            let options = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
+            document.getElementById('s_from').innerHTML = options;
+            document.getElementById('s_to').innerHTML = options;
         }});
-        // Load Signals
-        const cfgs = [
+        
+        const configs = [
             {f:'up_signals.csv', c:'green', t:'UP'}, {f:'dn_signals.csv', c:'blue', t:'DN'},
             {f:'up_mid_signals.csv', c:'purple', t:'UP-M'}, {f:'dn_mid_signals.csv', c:'red', t:'DN-M'}
         ];
-        cfgs.forEach(c => Papa.parse("master/"+c.f+"?v="+t, {download:true, header:true, complete: r => {
-            r.data.forEach(s => { s.clr = c.c; s.type = c.t; master.sigs.push(s); });
-        }}));
+        configs.forEach(cfg => {
+            Papa.parse("master/" + cfg.f + cacheBurst, {download:true, header:true, complete: r => {
+                r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; masterData.sigs.push(s); });
+            }});
+        });
     };
 
-    function generateAudit() {
+    function runFinalAudit() {
         const file = document.getElementById('rtis_csv').files[0];
-        if(!file) return alert("Pehle 22935.csv file select karein!");
-        
-        document.getElementById('status').innerText = "Processing Data...";
+        if(!file) return alert("Please upload RTIS CSV file!");
+
         const map = L.map('map').setView([21.15, 79.12], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
-            rtis = []; let pathPoints = [];
-            let stnF = master.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
-            let stnT = master.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
+            rtisData = []; let path = [];
+            let sFrom = masterData.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
+            let sTo = masterData.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
             
-            // Direction Detection
-            let dir = (toDec(stnT.Start_Lng) > toDec(stnF.Start_Lng)) ? "DN" : "UP";
+            // Logic: Compare Longitude to decide UP or DN
+            let isDown = (toDec(sTo.Start_Lng) > toDec(sFrom.Start_Lng));
+            let activeDir = isDown ? "DN" : "UP";
 
             res.data.forEach(row => {
                 let lt = parseFloat(row.Latitude), lg = parseFloat(row.Longitude), spd = parseFloat(row.Speed);
                 if(!isNaN(lt)) {
-                    rtis.push({lt, lg, spd});
-                    pathPoints.push([lt, lg]);
+                    rtisData.push({lt, lg, spd});
+                    path.push([lt, lg]);
                 }
             });
 
-            // Draw Track (Slim & Dashed)
-            L.polyline(pathPoints, {color: '#333', weight: 3, dashArray: '5, 10'}).addTo(map);
+            // Journey Line
+            L.polyline(path, {color: '#333', weight: 3, dashArray: '5, 10', opacity: 0.5}).addTo(map);
 
-            // Plot Assets
-            master.sigs.forEach(sig => {
-                let sLt = toDec(sig.Lat), sLg = toDec(sig.Lng);
-                if(sLt && sig.type.includes(dir)) {
-                    let spd = findSpeedAt(sLt, sLg);
-                    let name = sig.SIGNAL_NAME.toUpperCase();
-                    let mkr;
+            // PLOT SIGNALS
+            masterData.sigs.forEach(sig => {
+                let sLat = toDec(sig.Lat), sLng = toDec(sig.Lng);
+                
+                // Show BOTH Main and Mid signals for the active direction
+                if(sLat && sig.type.includes(activeDir)) {
+                    let spd = getSpeed(sLat, sLng);
+                    let sName = sig.SIGNAL_NAME.toUpperCase();
+                    let marker;
 
-                    if(name.includes("L XING") || name.includes("GATE")) {
-                        mkr = L.marker([sLt, sLg], {icon: L.divIcon({className:'lc-icon', html:'X', iconSize:[14,14]})});
+                    if(sName.includes("L XING") || sName.includes("GATE")) {
+                        marker = L.marker([sLat, sLng], {icon: L.divIcon({className:'lc-icon', html:'X', iconSize:[14,14]})});
                     } else {
-                        mkr = L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr, fillOpacity: 1, weight: 1});
+                        marker = L.circleMarker([sLat, sLng], {radius: 6, color: sig.clr, fillOpacity: 1, weight: 1.5});
                     }
 
-                    mkr.addTo(map).bindTooltip(`${name}<br><b>Speed: ${spd} Kmph</b>`);
+                    marker.addTo(map).bindTooltip(`<b>${sName}</b><br>Speed: ${spd} Kmph`);
                     
-                    // Permanent Speed Label
+                    // Always show Speed Digit on map
                     if(spd !== "N/A") {
-                        L.marker([sLt - 0.0003, sLg], {
-                            icon: L.divIcon({className: 'speed-tag', html: Math.round(spd), iconSize: [22, 12]})
+                        L.marker([sLat - 0.0004, sLng], {
+                            icon: L.divIcon({className: 'speed-tag', html: Math.round(spd), iconSize: [24, 12]})
                         }).addTo(map);
                     }
                 }
             });
 
-            // Plot Stations
-            master.stns.forEach(s => {
-                let lt = toDec(s['Start_Lat ']), lg = toDec(s['Start_Lng']);
-                if(lt) {
-                    L.marker([lt, lg], {icon: L.divIcon({className:'stn-label', html: s.Station_Name, iconSize:[50,18]})}).addTo(map);
+            // PLOT STATIONS
+            masterData.stns.forEach(stn => {
+                let lat = toDec(stn['Start_Lat ']), lng = toDec(stn['Start_Lng']);
+                if(lat) {
+                    L.marker([lat, lng], {icon: L.divIcon({className:'stn-label', html: stn.Station_Name, iconSize:[50,18]})}).addTo(map);
                 }
             });
 
-            map.fitBounds(pathPoints);
-            document.getElementById('status').innerText = "Audit Map Generated Successfully!";
+            map.fitBounds(path);
+            document.getElementById('status').innerHTML = `Direction: <b>${activeDir}</b><br>BQR DN HOME & all ${activeDir} signals mapped.`;
         }});
     }
 </script>
