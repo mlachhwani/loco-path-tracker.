@@ -1,29 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR AUDIT - CLEAN SIGNAL MAP</title>
+    <title>SECR AUDIT - HIGH ACCURACY MODE</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
         body { margin: 0; font-family: 'Segoe UI', Arial; display: flex; height: 100vh; }
         #sidebar { width: 300px; background: #002f6c; color: white; padding: 20px; z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
-        #map { flex-grow: 1; background: #f8f9fa; }
-        .speed-tag { background: white; border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 3px; border-radius: 2px; text-align: center; box-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+        #map { flex-grow: 1; background: #f1f1f1; }
+        .speed-tag { background: white; border: 1px solid #d32f2f; color: #d32f2f; font-size: 10px; font-weight: bold; padding: 1px 3px; border-radius: 2px; text-align: center; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
         select, input, button { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 5px; border: none; font-weight: bold; }
-        button { background: #28a745; color: white; cursor: pointer; font-size: 16px; border-bottom: 3px solid #1e7e34; }
-        button:active { border-bottom: none; transform: translateY(2px); }
-        #log { font-size: 12px; color: #acc6e6; margin-top: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 5px; line-height: 1.5; }
+        button { background: #28a745; color: white; cursor: pointer; font-size: 16px; border-bottom: 3px solid #1e7e34; transition: 0.2s; }
+        button:hover { background: #218838; }
+        #log { font-size: 11px; color: #acc6e6; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; border-left: 3px solid #28a745; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h2 style="border-bottom: 2px solid #d93025; padding-bottom: 10px;">SECR AUDIT</h2>
+    <h2 style="border-bottom: 2px solid #d93025; padding-bottom: 10px; font-size: 18px;">ACCURATE AUDIT TOOL</h2>
     <label>FROM STATION</label><select id="s_from"></select>
     <label>TO STATION</label><select id="s_to"></select>
     <label>RTIS DATA (22935.csv)</label><input type="file" id="csv_file">
-    <button onclick="drawMap()">GENERATE AUDIT MAP</button>
-    <div id="log">Status: Initializing Master Data...</div>
+    <button onclick="drawMap()">GENERATE ACCURATE MAP</button>
+    <div id="log">System: Ready<br>Mode: Interpolation Enabled</div>
 </div>
 
 <div id="map"></div>
@@ -43,9 +43,38 @@
         return foundKey ? row[foundKey] : null;
     }
 
+    // HIGH ACCURACY SPEED INTERPOLATION LOGIC
+    function getAccurateSpd(sLt, sLg) {
+        if(rtis.length === 0) return "N/A";
+        
+        let searchRadius = 0.002; // Approx 200m range for signal-GPS sync
+        let pointsInRange = rtis.filter(p => {
+            let d = Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2));
+            return d < searchRadius;
+        });
+
+        if(pointsInRange.length > 0) {
+            // Sort points by proximity to signal
+            pointsInRange.sort((a, b) => {
+                let dA = Math.sqrt(Math.pow(a.lt-sLt, 2) + Math.pow(a.lg-sLg, 2));
+                let dB = Math.sqrt(Math.pow(b.lt-sLt, 2) + Math.pow(b.lg-sLg, 2));
+                return dA - dB;
+            });
+
+            // INTERPOLATION: Take average of 2 closest points if available
+            let speed;
+            if(pointsInRange.length >= 2) {
+                speed = (pointsInRange[0].spd + pointsInRange[1].spd) / 2;
+            } else {
+                speed = pointsInRange[0].spd;
+            }
+            return speed.toFixed(1);
+        }
+        return "N/A";
+    }
+
     window.onload = function() {
         const t = Date.now();
-        // Station load sirf dropdown ke liye
         Papa.parse("master/station.csv?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
             master.stns = r.data;
             let h = r.data.map(s => {
@@ -53,7 +82,6 @@
                 return name ? `<option value="${name}">${name}</option>` : '';
             }).sort().join('');
             document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
-            document.getElementById('log').innerHTML = "✅ Stations Ready (Dropdown Only).";
         }});
 
         const files = [
@@ -63,16 +91,15 @@
         files.forEach(cfg => {
             Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, skipEmptyLines:true, complete: r => {
                 r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; master.sigs.push(s); });
-                document.getElementById('log').innerHTML = "✅ Master Signals Loaded.";
             }});
         });
     };
 
     function drawMap() {
         const file = document.getElementById('csv_file').files[0];
-        if(!file) return alert("Please select RTIS file!");
+        if(!file) return alert("Select RTIS File!");
 
-        const map = L.map('map').setView([21.15, 79.12], 11);
+        const map = L.map('map').setView([21.15, 79.12], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
@@ -91,26 +118,22 @@
                 }
             });
 
-            // 1. Path Line (Thick Black for visibility)
-            L.polyline(path, {color: '#222', weight: 4, opacity: 0.7}).addTo(map);
+            // 1. Journey Path
+            L.polyline(path, {color: '#333', weight: 4, opacity: 0.7}).addTo(map);
 
-            // 2. Signals (Direct Force Mapping)
+            // 2. Accurate Signal Mapping
             let count = 0;
             master.sigs.forEach(sig => {
                 let sLt = conv(getVal(sig, ['Lat'])), sLg = conv(getVal(sig, ['Lng']));
                 if(sLt && sig.type.includes(activeDir)) {
-                    let spd = "0.0";
-                    for(let p of rtis) {
-                        let d = Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2));
-                        if(d < 0.008) { spd = p.spd.toFixed(1); break; }
-                    }
+                    let spd = getAccurateSpd(sLt, sLg);
                     
                     L.circleMarker([sLt, sLg], {radius: 7, color: sig.clr, fillOpacity: 1, weight: 2}).addTo(map)
-                     .bindTooltip(getVal(sig, ['SIGNAL_NAME']) + " | Spd: " + spd);
+                     .bindTooltip(`<b>${getVal(sig, ['SIGNAL_NAME'])}</b><br>Interpolated Speed: ${spd} Kmph`);
                     
-                    if(spd !== "0.0") {
+                    if(spd !== "N/A") {
                         L.marker([sLt - 0.0004, sLg], {
-                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[24,12]})
+                            icon: L.divIcon({className:'speed-tag', html: Math.round(spd), iconSize:[26,14]})
                         }).addTo(map);
                     }
                     count++;
@@ -118,7 +141,7 @@
             });
 
             if(path.length > 0) map.fitBounds(path);
-            document.getElementById('log').innerHTML = `SUCCESS!<br>Direction: ${activeDir}<br>Signals Mapped: ${count}<br>(Stations Hidden)`;
+            document.getElementById('log').innerHTML = `✅ Audit Complete!<br>Dir: ${activeDir}<br>Signals: ${count}<br>Method: Interpolated Mean`;
         }});
     }
 </script>
