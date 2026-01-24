@@ -1,6 +1,6 @@
 /**
- * STAGE-02: MAPPING & LIVE TRACKING
- * Logic: Strict Direction Lock (UP/DN separation) & Unique LC Filter
+ * STAGE-02 FINAL: MAPPING & LIVE TRACKING
+ * Features: Strict Direction Lock, Hover Speed, Chronological Data Sync
  */
 
 let master = { stns: [], sigs: [] }, rtis = [];
@@ -18,7 +18,7 @@ function getVal(row, keys) {
     return foundKey ? row[foundKey] : null;
 }
 
-// Initial Data Load
+// Initial Data Load (Stations & Directional Signals)
 window.onload = function() {
     const t = Date.now();
     Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
@@ -27,20 +27,25 @@ window.onload = function() {
         document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
     }});
     
-    ['up_signals.csv', 'dn_signals.csv', 'up_mid_signals.csv', 'dn_mid_signals.csv'].forEach(f => {
-        let type = f.includes('up') ? 'UP' : 'DN';
-        if(f.includes('mid')) type += '_MID';
-        Papa.parse("master/"+f+"?v="+t, {download:true, header:true, complete: r => {
+    const signalFiles = [
+        {f:'up_signals.csv', type:'UP', clr:'green'},
+        {f:'dn_signals.csv', type:'DN', clr:'blue'},
+        {f:'up_mid_signals.csv', type:'UP_MID', clr:'purple'},
+        {f:'dn_mid_signals.csv', type:'DN_MID', clr:'red'}
+    ];
+
+    signalFiles.forEach(cfg => {
+        Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, complete: r => {
             r.data.forEach(s => { 
-                s.clr = (f.includes('dn') ? 'blue' : (f.includes('up') ? 'green' : 'purple')); 
-                s.type = type; 
+                s.clr = cfg.clr; 
+                s.type = cfg.type; 
                 master.sigs.push(s); 
             });
         }});
     });
 };
 
-// Accuracy Logic (Interpolation)
+// High Accuracy Interpolation for Tooltips
 function getAccurateSpd(sLt, sLg) {
     let radius = 0.002; 
     let pts = rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < radius);
@@ -57,23 +62,30 @@ function generateLiveMap() {
 
     Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
         rtis = []; let pathArr = [];
+        
+        // Processing RTIS and saving 'raw' row for report.js (Time sync)
         res.data.forEach(row => {
             let lt = parseFloat(getVal(row,['Latitude','Lat'])), lg = parseFloat(getVal(row,['Longitude','Lng']));
-            if(!isNaN(lt)) { rtis.push({lt, lg, spd: parseFloat(getVal(row,['Speed','Spd']))}); pathArr.push([lt, lg]); }
+            let sp = parseFloat(getVal(row,['Speed','Spd']));
+            if(!isNaN(lt)) { 
+                rtis.push({ lt, lg, spd: sp, raw: row }); 
+                pathArr.push([lt, lg]); 
+            }
         });
 
-        L.polyline(pathArr, {color: '#222', weight: 4, opacity: 0.7}).addTo(map);
+        // Clear previous layers and draw Path
+        L.polyline(pathArr, {color: '#333', weight: 4, opacity: 0.7}).addTo(map);
         map.fitBounds(pathArr);
 
-        // DIRECTION CHECK (NGP -> JSG = DN)
+        // Direction Determination Logic
         let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
         let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
         let isDN = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng'])));
         let activeDir = isDN ? "DN" : "UP";
         
-        document.getElementById('log').innerHTML = `<b>Audit Mode:</b> ${activeDir} Journey Detected. Mapping Signals...`;
+        document.getElementById('log').innerHTML = `<b>Mode:</b> ${activeDir} | <b>Status:</b> Mapping Signals...`;
 
-        // HOVER TRACKING
+        // LIVE HOVER TRACKING
         map.on('mousemove', function(e) {
             let minDist = 0.003, speed = "0.0";
             rtis.forEach(p => {
@@ -88,19 +100,25 @@ function generateLiveMap() {
             let name = getVal(sig,['SIGNAL_NAME','SIGNAL_N']);
             let sLt = conv(getVal(sig,['Lat'])), sLg = conv(getVal(sig,['Lng']));
             
-            // STRICT DIRECTION LOCK: Skip signals not in journey direction
+            // DIRECTION LOCK: Strictly ignore opposite line signals
             if(!sLt || !sig.type.startsWith(activeDir)) return;
 
             if(name.includes("LC") || name.includes("L XING")) {
                 let num = name.match(/\d+/);
                 if(num && plottedLCs.has(num[0])) return; 
                 if(num) plottedLCs.add(num[0]);
-                L.circleMarker([sLt, sLg], {radius: 8, color: 'orange', fillOpacity: 0.8}).addTo(map).bindTooltip("LC GATE: " + name);
+                L.circleMarker([sLt, sLg], {radius: 8, color: 'orange', fillOpacity: 0.8}).addTo(map)
+                 .bindTooltip("LC GATE: " + name);
             } else {
                 let spd = getAccurateSpd(sLt, sLg);
-                L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr}).addTo(map).bindTooltip(name + " | Speed: " + spd);
+                L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr}).addTo(map)
+                 .bindTooltip(name + " | Speed: " + spd);
+                
+                // Show speed tag on map for signals
                 if(spd !== "N/A") {
-                    L.marker([sLt-0.0004, sLg], {icon: L.divIcon({className:'speed-tag', html:Math.round(spd), iconSize:[26,14]})}).addTo(map);
+                    L.marker([sLt-0.0004, sLg], {
+                        icon: L.divIcon({className:'speed-tag', html:Math.round(spd), iconSize:[26,14]})
+                    }).addTo(map);
                 }
             }
         });
