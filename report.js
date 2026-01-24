@@ -1,8 +1,3 @@
-/**
- * REPORT.JS - FINAL FIXED VERSION
- * logic: No Backticks, No Template Literals to avoid rendering error
- */
-
 window.downloadExcelAudit = function() {
     if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
     var stnF = document.getElementById('s_from').value;
@@ -35,14 +30,13 @@ window.downloadExcelAudit = function() {
 
 window.saveInteractiveWebReport = function() {
     if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
-    
     var stnF = document.getElementById('s_from').value;
     var stnT = document.getElementById('s_to').value;
     var masterF = window.master.stns.find(function(s) { return getVal(s,['Station_Name']) === stnF; });
     var masterT = window.master.stns.find(function(s) { return getVal(s,['Station_Name']) === stnT; });
     var lg1 = conv(getVal(masterF,['Start_Lng'])), lg2 = conv(getVal(masterT,['Start_Lng']));
-    var dir = (lg2 > lg1) ? "DN" : "UP";
     var minLg = Math.min(lg1, lg2), maxLg = Math.max(lg1, lg2);
+    var dir = (lg2 > lg1) ? "DN" : "UP";
 
     var reportSigs = [];
     window.master.sigs.forEach(function(sig) {
@@ -57,44 +51,24 @@ window.saveInteractiveWebReport = function() {
     });
     reportSigs.sort(function(a,b) { return a.seq - b.seq; });
 
-    var pathData = JSON.stringify(window.rtis.map(function(p) { return [p.lt, p.lg]; }));
-    var sigData = JSON.stringify(reportSigs);
-
-    // Sidebar Content Logic
+    var pathData = JSON.stringify(window.rtis.map(function(p) { return {lt: p.lt, lg: p.lg, s: p.spd.toFixed(1), t: (getVal(p.raw,['Logging Time','Time'])||"")}; }));
     var listHtml = "";
     reportSigs.forEach(function(r) {
-        listHtml += '<div class="item" onclick="flyToSig(' + r.lt + ',' + r.lg + ')">' +
-                    '<span style="font-weight:bold;">' + r.n + '</span>' +
-                    '<span class="spd">' + r.s + ' Kmph</span><br>' +
-                    '<small style="color:#acc6e6;">' + r.t + '</small></div>';
+        listHtml += '<div class="item" onclick="flyToSig(' + r.lt + ',' + r.lg + ')"><b>' + r.n + '</b><span class="spd">' + r.s + ' Kmph</span><br><small>' + r.t + '</small></div>';
     });
 
-    // Final HTML Building using simple concatenation
-    var h = '<!DOCTYPE html><html><head><title>SECR REPORT</title>';
-    h += '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />';
-    h += '<style>body{margin:0;display:flex;font-family:sans-serif;height:100vh;}';
-    h += '#sidebar{width:320px;background:#002f6c;color:white;overflow-y:auto;padding:15px;}';
-    h += '#map{flex-grow:1;} .item{background:rgba(255,255,255,0.1);padding:12px;margin-bottom:8px;border-radius:5px;cursor:pointer;border-left:5px solid #ffc107;}';
-    h += '.spd{color:#00ff00;font-weight:bold;float:right;}</style></head><body>';
-    h += '<div id="sidebar"><h2>SECR AUDIT</h2><div>' + stnF + ' to ' + stnT + ' (' + dir + ')</div><hr>' + listHtml + '</div>';
-    h += '<div id="map"></div>';
-    h += '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>';
-    h += '<script>';
-    h += 'var m = L.map("map").setView([' + (reportSigs[0] ? reportSigs[0].lt : 21.1) + ',' + (reportSigs[0] ? reportSigs[0].lg : 79.1) + '], 13);';
-    h += 'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(m);';
-    h += 'var pathArr = ' + pathData + ';';
-    h += 'var pLine = L.polyline(pathArr, {color:"#333", weight:4}).addTo(m);';
-    h += 'if(pathArr.length > 0) m.fitBounds(pLine.getBounds());';
-    h += 'var sigs = ' + sigData + ';';
-    h += 'sigs.forEach(function(s){';
-    h += 'L.circleMarker([s.lt, s.lg], {radius:7, color:"blue", fillOpacity:0.9}).addTo(m).bindTooltip("<b>"+s.n+"</b><br>Speed: "+s.s+" Kmph");';
-    h += '});';
-    h += 'function flyToSig(lt, lg) { m.setView([lt, lg], 16); }';
-    h += '</script></body></html>';
+    var h = '<!DOCTYPE html><html><head><title>Audit Report</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />';
+    h += '<style>body{margin:0;display:flex;font-family:sans-serif;height:100vh;} #sidebar{width:320px;background:#002f6c;color:white;overflow-y:auto;padding:15px;} #map{flex-grow:1;} .item{background:rgba(255,255,255,0.1);padding:10px;margin-bottom:5px;border-radius:4px;cursor:pointer;border-left:4px solid #ffc107;} .spd{color:#00ff00;font-weight:bold;float:right;}</style></head><body>';
+    h += '<div id="sidebar"><h3>Audit: ' + stnF + ' - ' + stnT + '</h3><hr>' + listHtml + '</div><div id="map"></div>';
+    h += '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>';
+    h += 'var m = L.map("map").setView([' + (reportSigs[0]?reportSigs[0].lt:21.1) + ',' + (reportSigs[0]?reportSigs[0].lg:79.1) + '], 13); L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(m);';
+    h += 'var fullPath = ' + pathData + '; var pLine = L.polyline(fullPath.map(function(d){return [d.lt,d.lg]}), {color:"#333", weight:4}).addTo(m); if(fullPath.length > 0) m.fitBounds(pLine.getBounds());';
+    h += 'm.on("click", function(e){ var minDist=0.0005, p=null; fullPath.forEach(function(pt){ var d=Math.sqrt(Math.pow(pt.lt-e.latlng.lat,2)+Math.pow(pt.lg-e.latlng.lng,2)); if(d<minDist){minDist=d;p=pt;} }); if(p){ L.popup().setLatLng(e.latlng).setContent("Speed: "+p.s+" Kmph<br>Time: "+p.t).openOn(m); } });';
+    h += 'var sigs = ' + JSON.stringify(reportSigs) + '; sigs.forEach(function(s){ L.circleMarker([s.lt, s.lg], {radius:7, color:"blue"}).addTo(m).bindTooltip(s.n+" ("+s.s+" Kmph)"); }); function flyToSig(lt, lg) { m.setView([lt, lg], 16); }</script></body></html>';
 
     var blob = new Blob([h], {type: 'text/html'});
     var link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = "SECR_Report_" + stnF + ".html";
+    link.download = "Audit_" + stnF + ".html";
     link.click();
 };
