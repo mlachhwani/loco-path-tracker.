@@ -10,7 +10,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 function conv(v) {
     if(!v) return null;
     let n = parseFloat(v.toString().replace(/[^0-9.]/g, ''));
-    return isNaN(n) ? null : Math.floor(n/100) + ((n%100)/60);
+    if(isNaN(n)) return null;
+    let degrees = Math.floor(n / 100);
+    let minutes = (n % 100) / 60;
+    return degrees + minutes;
 }
 
 function getVal(row, keys) {
@@ -19,95 +22,143 @@ function getVal(row, keys) {
     return foundKey ? row[foundKey] : null;
 }
 
-// Data loading logic
+// Loading Station and Signal Master Data
 window.onload = function() {
-    const t = Date.now();
-    Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
-        master.stns = r.data;
-        let h = r.data.map(s => `<option value="${getVal(s,['Station_Name'])}">${getVal(s,['Station_Name'])}</option>`).sort().join('');
-        document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
-    }});
+    const timestamp = Date.now();
     
-    const sFiles = [
-        {f:'up_signals.csv', t:'UP', c:'green'},
-        {f:'dn_signals.csv', t:'DN', c:'blue'},
-        {f:'up_mid_signals.csv', t:'UP_MID', c:'purple'},
-        {f:'dn_mid_signals.csv', t:'DN_MID', c:'red'}
+    // Load Stations
+    Papa.parse("master/station.csv?v="+timestamp, {
+        download: true, 
+        header: true, 
+        complete: function(results) {
+            master.stns = results.data;
+            let options = results.data.map(s => {
+                let name = getVal(s, ['Station_Name']);
+                return `<option value="${name}">${name}</option>`;
+            }).sort().join('');
+            document.getElementById('s_from').innerHTML = options;
+            document.getElementById('s_to').innerHTML = options;
+        }
+    });
+    
+    // Load All Signal Files
+    const signalConfigs = [
+        {file: 'up_signals.csv', type: 'UP', color: 'green'},
+        {file: 'dn_signals.csv', type: 'DN', color: 'blue'},
+        {file: 'up_mid_signals.csv', type: 'UP_MID', color: 'purple'},
+        {file: 'dn_mid_signals.csv', type: 'DN_MID', color: 'red'}
     ];
 
-    sFiles.forEach(cfg => {
-        Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, complete: r => {
-            r.data.forEach(s => { 
-                s.clr = cfg.c; 
-                s.type = cfg.t; 
-                master.sigs.push(s); 
-            });
-        }});
+    signalConfigs.forEach(config => {
+        Papa.parse("master/" + config.file + "?v=" + timestamp, {
+            download: true, 
+            header: true, 
+            complete: function(results) {
+                results.data.forEach(signal => { 
+                    signal.clr = config.color; 
+                    signal.type = config.type; 
+                    master.sigs.push(signal); 
+                });
+            }
+        });
     });
 };
 
-function getAccurateSpd(sLt, sLg) {
+function getAccurateSpd(sigLat, sigLng) {
     let radius = 0.002; 
-    let pts = rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < radius);
-    if(pts.length > 0) {
-        pts.sort((a,b) => Math.sqrt(Math.pow(a.lt-sLt,2)+Math.pow(a.lg-sLg,2)) - Math.sqrt(Math.pow(b.lt-sLt,2)+Math.pow(b.lg-sLg,2)));
-        return (pts.length >= 2 ? (pts[0].spd + pts[1].spd)/2 : pts[0].spd).toFixed(1);
+    let pointsNear = rtis.filter(p => {
+        let dist = Math.sqrt(Math.pow(p.lt - sigLat, 2) + Math.pow(p.lg - sigLng, 2));
+        return dist < radius;
+    });
+
+    if(pointsNear.length > 0) {
+        pointsNear.sort((a, b) => {
+            let distA = Math.sqrt(Math.pow(a.lt - sigLat, 2) + Math.pow(a.lg - sigLng, 2));
+            let distB = Math.sqrt(Math.pow(b.lt - sigLat, 2) + Math.pow(b.lg - sigLng, 2));
+            return distA - distB;
+        });
+        if(pointsNear.length >= 2) {
+            return ((pointsNear[0].spd + pointsNear[1].spd) / 2).toFixed(1);
+        }
+        return pointsNear[0].spd.toFixed(1);
     }
     return "N/A";
 }
 
 function generateLiveMap() {
-    const file = document.getElementById('csv_file').files[0];
-    if(!file) return alert("Select RTIS CSV!");
+    const fileInput = document.getElementById('csv_file');
+    const file = fileInput.files[0];
+    if(!file) return alert("Pehle RTIS CSV Select karein!");
     
-    Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
-        rtis = []; let pathArr = [];
-        res.data.forEach(row => {
-            let lt = parseFloat(getVal(row,['Latitude','Lat'])), lg = parseFloat(getVal(row,['Longitude','Lng']));
-            if(!isNaN(lt)) { 
-                rtis.push({lt, lg, spd: parseFloat(getVal(row,['Speed','Spd'])), raw: row}); 
-                pathArr.push([lt, lg]); 
-            }
-        });
-
-        // Drawing path on map
-        L.polyline(pathArr, {color: '#333', weight: 4, opacity: 0.8}).addTo(map);
-        
-        // BETTER ZOOM Logic (Mukesh Ji's Request)
-        map.fitBounds(pathArr, {padding: [30, 30]});
-        setTimeout(() => { if(map.getZoom() < 14) map.setZoom(14); }, 800);
-
-        // LIVE Tracking on Mousemove
-        map.on('mousemove', function(e) {
-            let minDist = 0.003, speed = "0.0", time = "--:--:--";
-            rtis.forEach(p => {
-                let d = Math.sqrt(Math.pow(p.lt-e.latlng.lat, 2) + Math.pow(p.lg-e.latlng.lng, 2));
-                if(d < minDist) { 
-                    minDist = d; speed = p.spd.toFixed(1); 
-                    let fullTime = getVal(p.raw, ['Logging Time', 'Time', 'IST_Time']) || "--:--:--";
-                    time = fullTime.includes(' ') ? fullTime.split(' ')[1] : fullTime;
+    Papa.parse(file, {
+        header: true, 
+        skipEmptyLines: true, 
+        complete: function(res) {
+            rtis = []; 
+            let pathPoints = [];
+            
+            res.data.forEach(row => {
+                let lt = parseFloat(getVal(row, ['Latitude', 'Lat']));
+                let lg = parseFloat(getVal(row, ['Longitude', 'Lng']));
+                let speed = parseFloat(getVal(row, ['Speed', 'Spd']));
+                
+                if(!isNaN(lt) && !isNaN(lg)) { 
+                    rtis.push({lt: lt, lg: lg, spd: speed, raw: row}); 
+                    pathPoints.push([lt, lg]); 
                 }
             });
-            document.getElementById('live-speed').innerText = speed;
-            document.getElementById('live-time').innerText = time;
-        });
 
-        // Directional Signal Detection
-        let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
-        let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
-        let activeDir = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng']))) ? "DN" : "UP";
-        document.getElementById('log').innerHTML = `<b>Mode:</b> ${activeDir} Detected.`;
-
-        master.sigs.forEach(sig => {
-            let name = getVal(sig,['SIGNAL_NAME','SIGNAL_N']);
-            let sLt = conv(getVal(sig,['Lat'])), sLg = conv(getVal(sig,['Lng']));
-            if(!sLt || !sig.type.startsWith(activeDir)) return;
+            // Map Rendering
+            L.polyline(pathPoints, {color: '#333', weight: 4, opacity: 0.8}).addTo(map);
             
-            let spd = getAccurateSpd(sLt, sLg);
-            L.circleMarker([sLt, sLg], {radius: 6, color: sig.clr}).addTo(map).bindTooltip(name + " | Spd: " + spd);
-            if(spd !== "N/A") {
-                L.marker([sLt-0.0004, sLg], {icon: L.divIcon({className:'speed-tag', html:Math.round(spd), iconSize:[26,14]})}).addTo(map);
-            }
-        });
-    }});
+            // ZOOM IMPROVEMENT: Step-by-Step Focus
+            map.fitBounds(pathPoints, {padding: [30, 30]});
+            setTimeout(() => { 
+                if(map.getZoom() < 14) map.setZoom(14); 
+            }, 1000);
+
+            // Hover Tracking Logic
+            map.on('mousemove', function(e) {
+                let minDist = 0.003;
+                let currentSpeed = "0.0";
+                let currentTime = "--:--:--";
+                
+                rtis.forEach(point => {
+                    let d = Math.sqrt(Math.pow(point.lt - e.latlng.lat, 2) + Math.pow(point.lg - e.latlng.lng, 2));
+                    if(d < minDist) { 
+                        minDist = d; 
+                        currentSpeed = point.spd.toFixed(1); 
+                        let logTime = getVal(point.raw, ['Logging Time', 'Time', 'IST_Time']) || "--:--:--";
+                        currentTime = logTime.includes(' ') ? logTime.split(' ')[1] : logTime;
+                    }
+                });
+                document.getElementById('live-speed').innerText = currentSpeed;
+                document.getElementById('live-time').innerText = currentTime;
+            });
+
+            // Direction and Signal Plotting
+            let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+            let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+            let activeDir = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng']))) ? "DN" : "UP";
+            
+            document.getElementById('log').innerHTML = `<b>Mode:</b> ${activeDir} Running.`;
+
+            master.sigs.forEach(sig => {
+                let sigName = getVal(sig, ['SIGNAL_NAME', 'SIGNAL_N']);
+                let sLat = conv(getVal(sig, ['Lat']));
+                let sLng = conv(getVal(sig, ['Lng']));
+                
+                if(!sLat || !sig.type.startsWith(activeDir)) return;
+                
+                let signalSpeed = getAccurateSpd(sLat, sLng);
+                L.circleMarker([sLat, sLng], {radius: 6, color: sig.clr}).addTo(map).bindTooltip(sigName + " | Spd: " + signalSpeed);
+                
+                if(signalSpeed !== "N/A") {
+                    L.marker([sLat-0.0004, sLng], {
+                        icon: L.divIcon({className: 'speed-tag', html: Math.round(signalSpeed), iconSize: [26, 14]})
+                    }).addTo(map);
+                }
+            });
+        }
+    });
 }
