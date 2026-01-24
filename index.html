@@ -1,146 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SECR SMART AUDIT - M. LACHHWANI</title>
+    <title>SECR SAFETY AUDIT - FINAL MASTER</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Arial; background: #f0f2f5; }
-        .header { background: #002f6c; color: white; padding: 12px; text-align: center; font-size: 18px; font-weight: bold; }
-        #panel { max-width: 900px; margin: 15px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        #map { height: 750px; width: 98%; margin: 10px auto; border-radius: 8px; display: none; border: 2px solid #002f6c; }
-        .row { display: flex; gap: 15px; margin-bottom: 12px; }
-        label { font-weight: bold; display: block; margin-bottom: 5px; color: #002f6c; font-size: 14px; }
-        select, input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; }
-        .btn-run { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 350px; background: #002f6c; color: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.3); z-index: 1000; }
+        #map { flex-grow: 1; background: #e5e5e5; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; margin-bottom: 5px; color: #acc6e6; }
+        select, input { width: 100%; padding: 10px; border-radius: 5px; border: none; font-weight: bold; }
+        .btn-go { width: 100%; padding: 15px; background: #28a745; color: white; border: none; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 8px; margin-top: 10px; }
+        .btn-go:hover { background: #218838; }
+        /* Map Markers */
+        .stn-label { background: #ffa500; border: 1.5px solid #000; font-weight: bold; padding: 2px 5px; font-size: 11px; text-align: center; border-radius: 3px; white-space: nowrap; }
+        .speed-tag { background: rgba(255,255,255,0.9); border: 1px solid blue; color: blue; font-size: 10px; font-weight: bold; padding: 1px 3px; border-radius: 3px; text-align: center; }
+        .lc-icon { background: #ffff00; border: 2px solid #000; text-align: center; font-weight: bold; font-size: 12px; line-height: 14px; }
     </style>
 </head>
 <body>
 
-<div class="header">SECR SMART SAFETY AUDIT - DYNAMIC FILTERING</div>
-
-<div id="panel">
-    <div class="row">
-        <div style="flex:1;"><label>From Station:</label><select id="s_from"></select></div>
-        <div style="flex:1;"><label>To Station:</label><select id="s_to"></select></div>
+<div id="sidebar">
+    <h2 style="margin-top:0; border-bottom: 2px solid #d93025; padding-bottom: 10px;">SECR AUDIT</h2>
+    <div class="input-group">
+        <label>FROM STATION</label>
+        <select id="s_from"></select>
     </div>
-    <div class="row">
-        <div style="flex:1;"><label>Upload RTIS CSV (22935.csv):</label><input type="file" id="rtis_csv" accept=".csv"></div>
+    <div class="input-group">
+        <label>TO STATION</label>
+        <select id="s_to"></select>
     </div>
-    <button class="btn-run" onclick="runSmartAudit()">GENERATE FILTERED AUDIT</button>
+    <div class="input-group">
+        <label>UPLOAD RTIS CSV (22935.csv)</label>
+        <input type="file" id="rtis_csv" accept=".csv">
+    </div>
+    <button class="btn-go" onclick="generateAudit()">GENERATE MAP</button>
+    <div id="status" style="margin-top:20px; font-size: 13px; color: #acc6e6;">Status: Ready</div>
 </div>
 
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    let master = { stns: [], sigs: [] }, rtisPoints = [];
+    let master = { stns: [], sigs: [] }, rtis = [];
 
-    function toDec(val) {
-        if (!val || isNaN(val)) return null;
-        let d = Math.floor(val / 100), m = val % 100;
-        return d + (m / 60);
+    // Converter: 2109.27230 -> 21.154538
+    function toDec(v) {
+        if(!v || isNaN(v)) return null;
+        let d = Math.floor(v/100);
+        let m = v % 100;
+        return d + (m/60);
     }
 
-    // Distance calculation for signal filtering (in KM)
-    function getDist(lat1, lon1, lat2, lon2) {
-        let R = 6371;
-        let dLat = (lat2-lat1)*Math.PI/180;
-        let dLon = (lon2-lon1)*Math.PI/180;
-        let a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // Har asset ke liye nearest speed dhoondhna
+    function findSpeedAt(lat, lng) {
+        if(rtis.length === 0) return "N/A";
+        let minDest = 0.005; // ~500 meter search radius
+        let speed = "0.0";
+        rtis.forEach(p => {
+            let d = Math.sqrt(Math.pow(p.lt-lat, 2) + Math.pow(p.lg-lng, 2));
+            if(d < minDest) {
+                minDest = d;
+                speed = p.spd.toFixed(1);
+            }
+        });
+        return speed;
     }
 
     window.onload = function() {
         const t = Date.now();
+        // Load Stations
         Papa.parse("master/station.csv?v="+t, {download:true, header:true, complete: r => {
             master.stns = r.data;
-            let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).join('');
+            let h = r.data.map(s => `<option value="${s.Station_Name}">${s.Station_Name}</option>`).sort().join('');
             document.getElementById('s_from').innerHTML = h; document.getElementById('s_to').innerHTML = h;
         }});
-
-        const configs = [
+        // Load Signals
+        const cfgs = [
             {f:'up_signals.csv', c:'green', t:'UP'}, {f:'dn_signals.csv', c:'blue', t:'DN'},
             {f:'up_mid_signals.csv', c:'purple', t:'UP-M'}, {f:'dn_mid_signals.csv', c:'red', t:'DN-M'}
         ];
-        configs.forEach(cfg => {
-            Papa.parse("master/"+cfg.f+"?v="+t, {download:true, header:true, complete: r => {
-                r.data.forEach(s => { s.clr = cfg.c; s.type = cfg.t; master.sigs.push(s); });
-            }});
-        });
+        cfgs.forEach(c => Papa.parse("master/"+c.f+"?v="+t, {download:true, header:true, complete: r => {
+            r.data.forEach(s => { s.clr = c.c; s.type = c.t; master.sigs.push(s); });
+        }}));
     };
 
-    function runSmartAudit() {
+    function generateAudit() {
         const file = document.getElementById('rtis_csv').files[0];
-        const fromStn = document.getElementById('s_from').value;
-        const toStn = document.getElementById('s_to').value;
-
-        if(!file) return alert("Select RTIS File!");
-        document.getElementById('panel').style.display='none';
-        document.getElementById('map').style.display='block';
-
-        const map = L.map('map').setView([21.15, 79.12], 10);
+        if(!file) return alert("Pehle 22935.csv file select karein!");
+        
+        document.getElementById('status').innerText = "Processing Data...";
+        const map = L.map('map').setView([21.15, 79.12], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         Papa.parse(file, {header:true, skipEmptyLines:true, complete: function(res) {
-            let fullPath = [], solidPath = [], dashedPathBefore = [], dashedPathAfter = [];
-            let stnFrom = master.stns.find(s => s.Station_Name === fromStn);
-            let stnTo = master.stns.find(s => s.Station_Name === toStn);
-
-            let fLat = toDec(parseFloat(stnFrom['Start_Lat '])), fLon = toDec(parseFloat(stnFrom['Start_Lng']));
-            let tLat = toDec(parseFloat(stnTo['Start_Lat '])), tLon = toDec(parseFloat(stnTo['Start_Lng']));
-
-            // Direction Logic: If Longitude increases, it's DN (Eastbound)
-            let direction = (tLon > fLon) ? "DN" : "UP";
+            rtis = []; let pathPoints = [];
+            let stnF = master.stns.find(s => s.Station_Name === document.getElementById('s_from').value);
+            let stnT = master.stns.find(s => s.Station_Name === document.getElementById('s_to').value);
+            
+            // Direction Detection
+            let dir = (toDec(stnT.Start_Lng) > toDec(stnF.Start_Lng)) ? "DN" : "UP";
 
             res.data.forEach(row => {
-                let lat = parseFloat(row.Latitude), lng = parseFloat(row.Longitude);
-                if(!isNaN(lat)) {
-                    let pt = [lat, lng];
-                    fullPath.push(pt);
-                    rtisPoints.push({lat, lng, spd: parseFloat(row.Speed)});
-
-                    // Filter Path Logic
-                    let distFromStart = getDist(lat, lng, fLat, fLon);
-                    let distFromEnd = getDist(lat, lng, tLat, tLon);
-                    
-                    if (getDist(lat, lng, fLat, fLon) < 0.5 || (solidPath.length > 0 && getDist(lat, lng, tLat, tLon) > 0.5)) {
-                        solidPath.push(pt);
-                    } else if (solidPath.length === 0) {
-                        dashedPathBefore.push(pt);
-                    } else {
-                        dashedPathAfter.push(pt);
-                    }
+                let lt = parseFloat(row.Latitude), lg = parseFloat(row.Longitude), spd = parseFloat(row.Speed);
+                if(!isNaN(lt)) {
+                    rtis.push({lt, lg, spd});
+                    pathPoints.push([lt, lg]);
                 }
             });
 
-            // Drawing Paths (Weight 4 as requested)
-            L.polyline(dashedPathBefore, {color: 'black', weight: 4, dashArray: '5, 10', opacity: 0.5}).addTo(map);
-            L.polyline(solidPath, {color: 'black', weight: 4, opacity: 1}).addTo(map);
-            L.polyline(dashedPathAfter, {color: 'black', weight: 4, dashArray: '5, 10', opacity: 0.5}).addTo(map);
+            // Draw Track (Slim & Dashed)
+            L.polyline(pathPoints, {color: '#333', weight: 3, dashArray: '5, 10'}).addTo(map);
 
-            // Filter Signals: Only correct direction AND within 1km of path
+            // Plot Assets
             master.sigs.forEach(sig => {
-                if (sig.type.includes(direction)) {
-                    let sLat = toDec(parseFloat(sig.Lat)), sLng = toDec(parseFloat(sig.Lng));
-                    let isNearPath = fullPath.some(p => getDist(sLat, sLng, p[0], p[1]) < 1.0);
-                    
-                    if (isNearPath) {
-                        L.circleMarker([sLat, sLng], {radius: 5, color: sig.clr, fillOpacity: 1}).addTo(map)
-                         .bindTooltip(sig.type + ": " + sig.SIGNAL_NAME);
-                    }
-                }
-            });
-
-            // Plot relevant Stations
-            [stnFrom, stnTo].forEach(s => {
-                let lat = toDec(parseFloat(s['Start_Lat '])), lng = toDec(parseFloat(s['Start_Lng']));
-                L.marker([lat, lng], {icon: L.divIcon({className:'stn-label', html: s.Station_Name, iconSize:[40,15]})}).addTo(map);
-            });
-
-            map.fitBounds(solidPath.length > 0 ? solidPath : fullPath);
-        }});
-    }
-</script>
-</body>
-</html>
+                let sLt = toDec(sig.Lat), sLg = toDec(sig.Lng);
+                if(sLt && sig.type.includes(
