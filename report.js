@@ -1,141 +1,78 @@
 /**
  * REPORT.JS - STAGE 02 FINAL
- * ACTIONS: EXCEL DOWNLOAD & WEB SNAPSHOT
+ * FIX: ACCESSING GLOBAL WINDOW DATA
  */
 
-function getProcessedAuditData() {
-    if (rtis.length === 0) {
-        alert("Pehle '1. Generate Map' button dabayein!");
-        return null;
-    }
-    
-    let stnF = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
-    let stnT = master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+function downloadExcelAudit() {
+    if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
+
+    let stnF = window.master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+    let stnT = window.master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
     
     let startLg = conv(getVal(stnF, ['Start_Lng']));
     let endLg = conv(getVal(stnT, ['Start_Lng']));
-    
-    let minLg = Math.min(startLg, endLg);
-    let maxLg = Math.max(startLg, endLg);
     let activeDir = (endLg > startLg) ? "DN" : "UP";
+    let minLg = Math.min(startLg, endLg), maxLg = Math.max(startLg, endLg);
 
-    let finalLog = [];
+    let csvContent = "Asset Type,Location Name,Crossing Speed (Kmph),Crossing Time\n";
+    let log = [];
 
-    master.sigs.forEach(sig => {
+    window.master.sigs.forEach(sig => {
         let name = getVal(sig, ['SIGNAL_NAME', 'SIGNAL_N']);
-        let sLat = conv(getVal(sig, ['Lat']));
-        let sLng = conv(getVal(sig, ['Lng']));
-        
-        // Direction Filter
-        if (!sig.type.startsWith(activeDir)) return;
-        // Boundary Filter (Removes NGP if route is DURG-BSP)
-        if (sLng < minLg || sLng > maxLg) return;
-        // Exclusion Filter
-        if (name.includes("NS") || name.includes("NEU") || name.includes("LC")) return;
+        let sLt = conv(getVal(sig, ['Lat'])), sLg = conv(getVal(sig, ['Lng']));
+        if (!sig.type.startsWith(activeDir) || sLg < minLg || sLg > maxLg || name.includes("NS") || name.includes("LC")) return;
 
-        let radius = 0.002;
-        let matchPoints = rtis.filter(p => Math.sqrt(Math.pow(p.lt - sLat, 2) + Math.pow(p.lg - sLng, 2)) < radius);
-
-        if (matchPoints.length > 0) {
-            matchPoints.sort((a, b) => {
-                let distA = Math.sqrt(Math.pow(a.lt - sLat, 2) + Math.pow(a.lg - sLng, 2));
-                let distB = Math.sqrt(Math.pow(b.lt - sLat, 2) + Math.pow(b.lg - sLng, 2));
-                return distA - distB;
-            });
-            
-            let bestMatch = matchPoints[0];
-            finalLog.push({
-                name: name,
-                speed: bestMatch.spd.toFixed(1),
-                time: getVal(bestMatch.raw, ['Logging Time', 'Time', 'IST_Time']) || "N/A",
-                lat: sLat,
-                lng: sLng,
-                seq: rtis.indexOf(bestMatch)
-            });
+        let match = window.rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < 0.002);
+        if (match.length > 0) {
+            match.sort((a,b) => Math.sqrt(Math.pow(a.lt-sLt,2)+Math.pow(a.lg-sLg,2)) - Math.sqrt(Math.pow(b.lt-sLt,2)+Math.pow(b.lg-sLg,2)));
+            log.push({ name: name, speed: match[0].spd.toFixed(1), time: getVal(match[0].raw, ['Logging Time', 'Time']) || "N/A", seq: window.rtis.indexOf(match[0]) });
         }
     });
 
-    // Chronological Sorting (Train movement sequence)
-    finalLog.sort((a, b) => a.seq - b.seq);
-    
-    return { 
-        data: finalLog, 
-        dir: activeDir, 
-        from: stnF.Station_Name, 
-        to: stnT.Station_Name 
-    };
-}
-
-// Button 2: Excel Download
-function downloadExcelAudit() {
-    let audit = getProcessedAuditData();
-    if (!audit) return;
-
-    let csvContent = "Asset Type,Location Name,Crossing Speed (Kmph),Crossing Time\n";
-    audit.data.forEach(row => {
-        csvContent += `SIGNAL,${row.name},${row.speed},${row.time}\n`;
+    log.sort((a,b) => a.seq - b.seq).forEach(r => {
+        csvContent += `SIGNAL,${r.name},${r.speed},${r.time}\n`;
     });
 
-    let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    let link = document.createElement("a");
-    let url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `SECR_Excel_Audit_${audit.from}_to_${audit.to}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    let b = new Blob([csvContent], {type: 'text/csv'});
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `SECR_Audit_${stnF.Station_Name}_to_${stnT.Station_Name}.csv`;
+    a.click();
 }
 
-// Button 3: Interactive Web Snapshot
 function saveInteractiveWebReport() {
-    let audit = getProcessedAuditData();
-    if (!audit) return;
-    
-    const rtisPath = JSON.stringify(rtis.map(p => [p.lt, p.lg]));
-    const signalsData = JSON.stringify(audit.data);
+    if (!window.rtis || window.rtis.length === 0) return alert("Pehle Step 1: Map Generate karein!");
 
-    const htmlContent = `
-        <html><head><title>Interactive Report: ${audit.from}-${audit.to}</title>
+    let stnF = window.master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_from').value);
+    let stnT = window.master.stns.find(s => getVal(s, ['Station_Name']) === document.getElementById('s_to').value);
+    let activeDir = (conv(getVal(stnT,['Start_Lng'])) > conv(getVal(stnF,['Start_Lng']))) ? "DN" : "UP";
+
+    let sigData = [];
+    window.master.sigs.forEach(sig => {
+        let sLt = conv(getVal(sig,['Lat'])), sLg = conv(getVal(sig,['Lng']));
+        if (!sig.type.startsWith(activeDir)) return;
+        let match = window.rtis.filter(p => Math.sqrt(Math.pow(p.lt-sLt, 2) + Math.pow(p.lg-sLg, 2)) < 0.002);
+        if (match.length > 0) {
+            match.sort((a,b) => Math.sqrt(Math.pow(a.lt-sLt,2)+Math.pow(a.lg-sLg,2)) - Math.sqrt(Math.pow(b.lt-sLt,2)+Math.pow(b.lg-sLg,2)));
+            sigData.push({ name: getVal(sig,['SIGNAL_NAME']), spd: match[0].spd.toFixed(1), time: getVal(match[0].raw, ['Logging Time', 'Time']) || "N/A", lt: sLt, lg: sLg, seq: window.rtis.indexOf(match[0]) });
+        }
+    });
+    sigData.sort((a,b) => a.seq - b.seq);
+
+    const pathStr = JSON.stringify(window.rtis.map(p => [p.lt, p.lg]));
+    const sigStr = JSON.stringify(sigData);
+
+    const html = `
+        <html><head><title>SECR Interactive Report</title>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <style>
-            body{margin:0; font-family: 'Segoe UI', Arial; display: flex;} 
-            #map{height:100vh; flex-grow: 1;} 
-            .info-panel{width: 300px; background:white; padding:15px; box-shadow:-2px 0 10px rgba(0,0,0,0.1); overflow-y:auto;}
-            .sig-card{padding:10px; border-bottom:1px solid #eee; cursor:pointer;}
-            .sig-card:hover{background:#f9f9f9;}
-            .spd-val{color:red; font-weight:bold; font-size:18px;}
-        </style></head>
-        <body>
-            <div id="map"></div>
-            <div class="info-panel">
-                <h3 style="color:#002f6c; margin-top:0;">${audit.from} to ${audit.to}</h3>
-                <p>Direction: ${audit.dir} | Signals: ${audit.data.length}</p><hr>
-                ${audit.data.map(r => \`
-                    <div class="sig-card" onclick="focusSig(\${r.lat}, \${r.lng})">
-                        <b>\${r.name}</b><br>
-                        <span class="spd-val">\${r.speed}</span> Kmph<br>
-                        <small>\${r.time}</small>
-                    </div>\`).join('')}
-            </div>
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-            <script>
-                const map = L.map('map').setView([\${audit.data[0]?.lat}, \${audit.data[0]?.lng}], 14);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                L.polyline(\${rtisPath}, {color: 'black', weight: 4}).addTo(map);
-                
-                const sigs = \${signalsData};
-                sigs.forEach(s => {
-                    L.circleMarker([s.lat, s.lng], {radius: 7, color: 'blue', fillOpacity:1}).addTo(map).bindTooltip(s.name + " (" + s.speed + " Kmph)");
-                });
-                
-                function focusSig(lt, lg) { map.setView([lt, lg], 16); }
-            </script>
-        </body></html>`;
+        <style>body{margin:0; font-family:sans-serif; display:flex;} #map{height:100vh; flex-grow:1;} .panel{width:300px; padding:15px; overflow-y:auto; background:white; box-shadow:-2px 0 10px rgba(0,0,0,0.1);}</style></head>
+        <body><div id="map"></div><div class="panel"><h3>${stnF.Station_Name} to ${stnT.Station_Name}</h3><hr>${sigData.map(r => `<div onclick="m.setView([${r.lt},${r.lg}],16)" style="cursor:pointer; padding:8px; border-bottom:1px solid #eee;"><b>${r.name}</b><br><span style="color:red">${r.spd} Kmph</span> | ${r.time}</div>`).join('')}</div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>const m=L.map('map').setView([${sigData[0]?.lt},${sigData[0]?.lg}],14); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m); L.polyline(${pathStr},{color:'black'}).addTo(m); ${sigStr}.forEach(s=>{L.circleMarker([s.lt,s.lg],{radius:7,color:'blue'}).addTo(m).bindTooltip(s.name+' ('+s.spd+')')});</script></body></html>`;
 
-    let blob = new Blob([htmlContent], { type: 'text/html' });
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `SECR_Interactive_Report_${audit.from}_to_${audit.to}.html`;
-    link.click();
+    let b = new Blob([html], {type: 'text/html'});
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `SECR_Interactive_Report_${stnF.Station_Name}.html`;
+    a.click();
 }
